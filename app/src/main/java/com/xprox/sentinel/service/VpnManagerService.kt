@@ -650,7 +650,9 @@ class VpnManagerService : VpnService() {
                         _activeTetheringIps.value = updatedIps
                         if (updatedIps.isNotEmpty() && _isRunningFlow.value) {
                             // Restart VPN to bind to the newly active hotspot interface IPs!
-                            val restartIntent = Intent(this@VpnManagerService, VpnManagerService::class.java)
+                            val restartIntent = Intent(this@VpnManagerService, VpnManagerService::class.java).apply {
+                                action = ACTION_RELOAD_CONFIG
+                            }
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                                 startForegroundService(restartIntent)
                             } else {
@@ -671,7 +673,9 @@ class VpnManagerService : VpnService() {
                     serviceScope.launch(Dispatchers.Main) {
                         delay(500)
                         if (_isRunningFlow.value) {
-                            val restartIntent = Intent(this@VpnManagerService, VpnManagerService::class.java)
+                            val restartIntent = Intent(this@VpnManagerService, VpnManagerService::class.java).apply {
+                                action = ACTION_RELOAD_CONFIG
+                            }
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                                 startForegroundService(restartIntent)
                             } else {
