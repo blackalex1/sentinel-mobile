@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Share log files saved inside the context.getExternalFilesDir(null) folder -->
+    <external-files-path name="logs" path="." />
+    <!-- Share log files saved inside context.filesDir folder -->
+    <files-path name="internal_logs" path="." />
+</paths>
