@@ -96,6 +96,30 @@ object XrayCoreDownloader {
     /**
      * Downloads and extracts the official Xray zip package asynchronously.
      */
+    private fun getFileSha256(file: File): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { stream ->
+            val buffer = ByteArray(8192)
+            var read: Int
+            while (stream.read(buffer).also { read = it } != -1) {
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private fun extractSha256FromDgst(dgstContent: String): String? {
+        val lines = dgstContent.lines()
+        for (line in lines) {
+            if (line.contains("sha256", ignoreCase = true) || line.contains("sha-256", ignoreCase = true)) {
+                val match = Regex("""\b([0-9a-fA-F]{64})\b""").find(line)
+                if (match != null) return match.groupValues[1].lowercase()
+            }
+        }
+        val match = Regex("""\b([0-9a-fA-F]{64})\b""").find(dgstContent)
+        return match?.groupValues?.get(1)?.lowercase()
+    }
+
     suspend fun downloadAndInstall(
         context: Context, 
         version: String = FALLBACK_XRAY_VERSION, 
@@ -117,6 +141,52 @@ object XrayCoreDownloader {
             try { tempZipFile.delete() } catch (e: Exception) {}
             return@withContext false
         }
+
+        // 1.b Checksum verification step (Security hardening)
+        val dgstUrl = "$downloadUrl.dgst"
+        val tempDgstFile = File(binDir, "temp_xray.dgst")
+        
+        Log.i(TAG, "Downloading checksum verification file from $dgstUrl...")
+        val dgstDownloadSuccess = downloadSingleFile(dgstUrl, tempDgstFile) { }
+        if (!dgstDownloadSuccess || !tempDgstFile.exists()) {
+            Log.e(TAG, "Failed to download Xray core checksum verification file")
+            try { tempZipFile.delete() } catch (e: Exception) {}
+            try { tempDgstFile.delete() } catch (e: Exception) {}
+            return@withContext false
+        }
+        
+        val dgstContent = try {
+            tempDgstFile.readText(Charsets.UTF_8)
+        } catch (e: Exception) {
+            ""
+        } finally {
+            try { tempDgstFile.delete() } catch (e: Exception) {}
+        }
+        
+        val expectedSha256 = extractSha256FromDgst(dgstContent)
+        if (expectedSha256 == null) {
+            Log.e(TAG, "Failed to parse expected SHA-256 from verification file. Content: $dgstContent")
+            try { tempZipFile.delete() } catch (e: Exception) {}
+            return@withContext false
+        }
+        
+        Log.i(TAG, "Calculating SHA-256 checksum for downloaded zip archive...")
+        val calculatedSha256 = try {
+            getFileSha256(tempZipFile)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to compute SHA-256 checksum", e)
+            try { tempZipFile.delete() } catch (e: Exception) {}
+            return@withContext false
+        }
+        
+        Log.i(TAG, "Checksum verification: Expected=$expectedSha256, Calculated=$calculatedSha256")
+        if (!calculatedSha256.equals(expectedSha256, ignoreCase = true)) {
+            Log.e(TAG, "CRITICAL ERROR: SHA-256 checksum mismatch! The downloaded binary is corrupt or compromised.")
+            try { tempZipFile.delete() } catch (e: Exception) {}
+            return@withContext false
+        }
+        
+        Log.i(TAG, "SHA-256 checksum successfully verified.")
         
         try {
             Log.i(TAG, "Extracting Xray core ZIP package...")

@@ -13,4 +13,5 @@ local.properties
 *.log
 /app/src/store/
 /app/src/testStore/
+/tools/jadx/
 

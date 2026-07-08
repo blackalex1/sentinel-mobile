@@ -33,13 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.xprox.sentinel.log.LogManager
-import com.xprox.sentinel.theme.DarkBg
-import com.xprox.sentinel.theme.DarkCard
-import com.xprox.sentinel.theme.CyberTeal
-import com.xprox.sentinel.theme.CardBorder
-import com.xprox.sentinel.theme.WarningRed
-import com.xprox.sentinel.theme.TextWhite
-import com.xprox.sentinel.theme.TextGray
+import com.xprox.sentinel.theme.*
 import com.xprox.sentinel.data.LanguageManager
 import com.xprox.sentinel.data.string
 import com.xprox.sentinel.ui.screens.trafficlogs.*
@@ -277,32 +271,45 @@ fun TrafficLogsScreen() {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Log Source Toggle Tab (Traffic / Xray)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        // Log Source Toggle Tab (Traffic / Xray) - Custom Segmented Pill Control
+        Surface(
+            color = DarkCard,
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(0.5.dp, CardBorder),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(42.dp)
         ) {
-            Button(
-                onClick = { selectedLogSource = "traffic" },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (selectedLogSource == "traffic") CyberTeal else DarkCard,
-                    contentColor = if (selectedLogSource == "traffic") DarkBg else TextWhite
-                ),
-                border = BorderStroke(1.dp, if (selectedLogSource == "traffic") CyberTeal else CardBorder),
-                modifier = Modifier.weight(1f)
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(string("logs_tab_traffic"), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            }
-            Button(
-                onClick = { selectedLogSource = "xray" },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (selectedLogSource == "xray") CyberTeal else DarkCard,
-                    contentColor = if (selectedLogSource == "xray") DarkBg else TextWhite
-                ),
-                border = BorderStroke(1.dp, if (selectedLogSource == "xray") CyberTeal else CardBorder),
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(string("logs_tab_xray"), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                listOf(
+                    "traffic" to string("logs_tab_traffic"),
+                    "xray" to string("logs_tab_xray")
+                ).forEach { (source, label) ->
+                    val isSelected = selectedLogSource == source
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .padding(2.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isSelected) CyberTeal else Color.Transparent)
+                            .clickable(
+                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                indication = null
+                            ) { selectedLogSource = source }
+                    ) {
+                        Text(
+                            text = label,
+                            color = if (isSelected) DarkBg else TextWhite,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
         }
 
@@ -382,63 +389,83 @@ fun TrafficLogsScreen() {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Monospaced HUD Console Logger
-        LazyColumn(
+        // Monospaced HUD Console Logger - Double-Bezel Frame
+        Card(
+            colors = CardDefaults.cardColors(containerColor = DarkCard),
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .clip(RoundedCornerShape(12.dp))
-                .background(DarkCard)
-                .padding(12.dp)
+                .clip(RoundedCornerShape(20.dp)),
+            border = BorderStroke(
+                width = 1.dp,
+                brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                    listOf(CyberTeal.copy(alpha = 0.35f), CyberBlue.copy(alpha = 0.05f))
+                )
+            )
         ) {
-            if (selectedLogSource == "traffic") {
-                if (filteredLogs.isEmpty()) {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillParentMaxSize()
-                                .padding(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = string("hud_idle"),
-                                color = TextGray,
-                                fontSize = 12.sp,
-                                fontFamily = FontFamily.Monospace
-                            )
+            Card(
+                colors = CardDefaults.cardColors(containerColor = DarkBg),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(4.dp)
+                    .clip(RoundedCornerShape(16.dp)),
+                border = BorderStroke(0.5.dp, CardBorder)
+            ) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(12.dp)
+                ) {
+                    if (selectedLogSource == "traffic") {
+                        if (filteredLogs.isEmpty()) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillParentMaxSize()
+                                        .padding(32.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = string("hud_idle"),
+                                        color = TextGray,
+                                        fontSize = 11.sp,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            }
+                        } else {
+                            items(filteredLogs) { logLine ->
+                                TrafficLogItem(logLine = logLine, activePorts = activePorts)
+                            }
                         }
-                    }
-                } else {
-                    items(filteredLogs) { logLine ->
-                        TrafficLogItem(logLine = logLine, activePorts = activePorts)
-                    }
-                }
-            } else {
-                if (xrayLogsList.isEmpty()) {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillParentMaxSize()
-                                .padding(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = if (LanguageManager.currentLanguage.value.code == "ru") "[ЛОГИ XRAY ПУСТЫ]" else "[XRAY PROCESS LOGS EMPTY]",
-                                color = TextGray,
-                                fontSize = 12.sp,
-                                fontFamily = FontFamily.Monospace
-                            )
+                    } else {
+                        if (xrayLogsList.isEmpty()) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillParentMaxSize()
+                                        .padding(32.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = if (LanguageManager.currentLanguage.value.code == "ru") "[ЛОГИ XRAY ПУСТЫ]" else "[XRAY PROCESS LOGS EMPTY]",
+                                        color = TextGray,
+                                        fontSize = 11.sp,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            }
+                        } else {
+                            items(xrayLogsList) { line ->
+                                Text(
+                                    text = line,
+                                    color = TextWhite,
+                                    fontSize = 10.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                )
+                            }
                         }
-                    }
-                } else {
-                    items(xrayLogsList) { line ->
-                        Text(
-                            text = line,
-                            color = TextWhite,
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace,
-                            modifier = Modifier.padding(vertical = 2.dp)
-                        )
                     }
                 }
             }

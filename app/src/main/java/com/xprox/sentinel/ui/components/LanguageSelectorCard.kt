@@ -22,59 +22,49 @@ import com.xprox.sentinel.theme.*
 fun LanguageSelectorCard(context: Context) {
     val currentLang by LanguageManager.currentLanguage.collectAsState()
 
-    Card(
-        colors = CardDefaults.cardColors(containerColor = DarkCard),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp)),
-        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(CardBorder))
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(
-                text = string("lang_card_title"),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextWhite,
-                letterSpacing = 1.sp
-            )
-            Text(
-                text = string("lang_card_desc"),
-                fontSize = 10.sp,
-                color = TextGray,
-                modifier = Modifier.padding(bottom = 12.dp)
-            )
+    SentinelSettingsCard {
+        Text(
+            text = string("lang_card_title"),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextWhite,
+            letterSpacing = 1.sp
+        )
+        Text(
+            text = string("lang_card_desc"),
+            fontSize = 10.sp,
+            color = TextGray,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
 
-            // Segmented selector row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(DarkBg)
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                LanguageManager.Language.values().forEach { lang ->
-                    val isSelected = currentLang == lang
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(if (isSelected) CyberTeal.copy(alpha = 0.15f) else Color.Transparent)
-                            .clickable {
-                                LanguageManager.setLanguage(context, lang)
-                            }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = lang.displayName,
-                            color = if (isSelected) CyberTeal else TextWhite,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
-                    }
+        // Segmented selector row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(DarkBg)
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            LanguageManager.Language.values().forEach { lang ->
+                val isSelected = currentLang == lang
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (isSelected) CyberTeal.copy(alpha = 0.15f) else DarkCard)
+                        .clickable {
+                            LanguageManager.setLanguage(context, lang)
+                        }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = lang.displayName,
+                        color = if (isSelected) CyberTeal else TextWhite,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
                 }
             }
         }

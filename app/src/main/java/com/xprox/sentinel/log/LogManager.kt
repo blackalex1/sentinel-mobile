@@ -18,6 +18,12 @@ import java.util.Locale
 object LogManager {
     private const val TAG = "LogManager"
     private const val LOG_FILE_NAME = "x_prox_sensitive_connections.log"
+
+    private val logExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "sentinel-log-writer").apply {
+            priority = Thread.MIN_PRIORITY
+        }
+    }
     private const val PREFS_NAME = "x_prox_sensitive_ports_prefs"
     private const val KEY_ACTIVE_PORTS = "active_sensitive_ports"
 
@@ -202,8 +208,15 @@ object LogManager {
         }
     }
 
-    @Synchronized
     private fun writeLogToFile(context: Context, entry: LogEntry) {
+        val appContext = context.applicationContext
+        logExecutor.execute {
+            writeLogToFileInternal(appContext, entry)
+        }
+    }
+
+    @Synchronized
+    private fun writeLogToFileInternal(context: Context, entry: LogEntry) {
         try {
             val directory = context.filesDir
             val logFile = File(directory, LOG_FILE_NAME)
@@ -297,6 +310,7 @@ object LogManager {
     /**
      * Clears all log history including the 5 historical sessions
      */
+    @Synchronized
     fun clearLogs(context: Context): Boolean {
         return try {
             val directory = context.filesDir

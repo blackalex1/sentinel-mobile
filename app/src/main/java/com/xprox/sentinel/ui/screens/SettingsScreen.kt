@@ -54,73 +54,66 @@ fun SettingsScreen() {
                 color = TextGray
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Cyber Segmented Language Selector
+            // SECTION 1
+            Text(
+                text = "01 // TUNNEL & ROUTING CORE",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = CyberTeal,
+                letterSpacing = 1.5.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+
             LanguageSelectorCard(context = context)
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Battery Optimization status card
-            BatteryOptimizationCard(context = context)
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Notification Speed settings card
-            NotificationSettingsCard(context = context)
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Leakage protection Kill Switch card
+            Spacer(modifier = Modifier.height(16.dp))
             KillSwitchCard(context = context)
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Xray Core and GeoIP/GeoSite database downloader/updater card
+            Spacer(modifier = Modifier.height(16.dp))
             CoreDownloaderCard(context = context, isVpnActive = isVpnActive)
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Custom DNS Server settings card
+            Spacer(modifier = Modifier.height(16.dp))
             DnsSettingsCard(context = context)
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Local loopback SOCKS5 proxy settings card
+            Spacer(modifier = Modifier.height(16.dp))
             LocalProxyCard(context = context)
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-
-
-            // LAN / Hotspot Sharing Section
+            // SECTION 2
             Text(
-                text = string("lan_sharing_title"),
-                fontSize = 11.sp,
+                text = "02 // ZERO TRUST SECURITY AUDITS",
+                fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
-                color = TextWhite,
-                letterSpacing = 1.sp
+                color = CyberTeal,
+                letterSpacing = 1.5.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            LanSharingCard(context = context)
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-
-
-            // Sensitive Audit Ports Selector Card
             SensitivePortsCard(context = context)
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Zero Trust Blocked Applications Card
+            Spacer(modifier = Modifier.height(16.dp))
             com.xprox.sentinel.ui.components.BlockedAppsCard(context = context)
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Log Export & Settings Card
+            Spacer(modifier = Modifier.height(16.dp))
             LogExportCard(context = context)
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // SECTION 3
+            Text(
+                text = "03 // SYSTEM INTEGRATION & LAN",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = CyberTeal,
+                letterSpacing = 1.5.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+
+            BatteryOptimizationCard(context = context)
+            Spacer(modifier = Modifier.height(16.dp))
+            NotificationSettingsCard(context = context)
+            Spacer(modifier = Modifier.height(16.dp))
+            LanSharingCard(context = context)
         }
 
         Spacer(modifier = Modifier.height(32.dp))

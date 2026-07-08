@@ -23,6 +23,12 @@ data class ConnectionRecord(
 object PacketForensics {
     private const val TAG = "PacketForensics"
 
+    private val executor = java.util.concurrent.Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "sentinel-pcap-writer").apply {
+            priority = Thread.MIN_PRIORITY
+        }
+    }
+
     /**
      * Helper to synthesize a valid IPv4 TCP/UDP raw packet byte array on-the-fly
      * when real packet bytes are not accessible (e.g. under Native Xray mode).
@@ -280,8 +286,20 @@ object PacketForensics {
     /**
      * Helper to write raw network packets in standard little-endian PCAP binary format.
      */
-    @Synchronized
     fun writePacketToPcap(
+        context: Context,
+        packageName: String,
+        packetBytes: ByteArray,
+        timestampMs: Long
+    ) {
+        val appContext = context.applicationContext
+        val bytesCopy = packetBytes.clone()
+        executor.execute {
+            writePacketToPcapInternal(appContext, packageName, bytesCopy, timestampMs)
+        }
+    }
+
+    private fun writePacketToPcapInternal(
         context: Context,
         packageName: String,
         packetBytes: ByteArray,

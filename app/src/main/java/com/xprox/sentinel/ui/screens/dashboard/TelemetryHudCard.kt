@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
@@ -41,101 +42,121 @@ fun TelemetryHudCard(
             colors = CardDefaults.cardColors(containerColor = DarkCard),
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp)),
-            border = BorderStroke(1.dp, CyberTeal.copy(alpha = 0.3f))
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                // Header
-                Text(
-                    text = if (isRu) "АКТИВНАЯ ТЕЛЕМЕТРИЯ СЕТИ" else "LIVE NETWORK TELEMETRY",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = CyberTeal,
-                    letterSpacing = 1.sp
+                .clip(RoundedCornerShape(20.dp)),
+            border = BorderStroke(
+                width = 1.dp,
+                brush = Brush.horizontalGradient(
+                    listOf(CyberTeal.copy(alpha = 0.4f), CyberBlue.copy(alpha = 0.1f))
                 )
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Download Panel
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = DarkBg),
-                        border = BorderStroke(0.5.dp, CardBorder),
-                        modifier = Modifier.weight(1f)
+            )
+        ) {
+            // Inner Core (Double-Bezel Beveled Nested Card)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = DarkBg),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(4.dp)
+                    .clip(RoundedCornerShape(16.dp)),
+                border = BorderStroke(0.5.dp, CardBorder)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    // Header
+                    Text(
+                        text = if (isRu) "АКТИВНАЯ ТЕЛЕМЕТРИЯ СЕТИ" else "LIVE NETWORK TELEMETRY",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = CyberTeal,
+                        letterSpacing = 1.5.sp,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                    )
+                    
+                    Spacer(modifier = Modifier.height(10.dp))
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                        // Download Panel
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = DarkCard),
+                            border = BorderStroke(0.5.dp, CardBorder),
+                            modifier = Modifier.weight(1f)
                         ) {
-                            Text(
-                                text = if (isRu) "ЗАГРУЗКА" else "DOWNLOAD",
-                                fontSize = 9.sp,
-                                color = TextGray,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.ArrowDownward,
-                                    contentDescription = "Down",
-                                    tint = SecureGreen,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = downSpeed,
-                                    fontSize = 14.sp,
+                                    text = if (isRu) "ЗАГРУЗКА" else "DOWNLOAD",
+                                    fontSize = 8.sp,
+                                    color = TextGray,
                                     fontWeight = FontWeight.Bold,
-                                    color = TextWhite
+                                    letterSpacing = 1.sp
                                 )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDownward,
+                                        contentDescription = "Down",
+                                        tint = SecureGreen,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = downSpeed,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextWhite,
+                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                    )
+                                }
                             }
                         }
-                    }
 
-                    // Upload Panel
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = DarkBg),
-                        border = BorderStroke(0.5.dp, CardBorder),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                        // Upload Panel
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = DarkCard),
+                            border = BorderStroke(0.5.dp, CardBorder),
+                            modifier = Modifier.weight(1f)
                         ) {
-                            Text(
-                                text = if (isRu) "ОТДАЧА" else "UPLOAD",
-                                fontSize = 9.sp,
-                                color = TextGray,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.ArrowUpward,
-                                    contentDescription = "Up",
-                                    tint = CyberBlue,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = upSpeed,
-                                    fontSize = 14.sp,
+                                    text = if (isRu) "ОТДАЧА" else "UPLOAD",
+                                    fontSize = 8.sp,
+                                    color = TextGray,
                                     fontWeight = FontWeight.Bold,
-                                    color = TextWhite
+                                    letterSpacing = 1.sp
                                 )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowUpward,
+                                        contentDescription = "Up",
+                                        tint = CyberBlue,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = upSpeed,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextWhite,
+                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                    )
+                                }
                             }
                         }
                     }

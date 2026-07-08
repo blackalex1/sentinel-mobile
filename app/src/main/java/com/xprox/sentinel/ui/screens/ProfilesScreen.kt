@@ -127,48 +127,47 @@ fun ProfilesScreen() {
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Cyber Segmented Tab Selector
-        Row(
+        // Cyber Segmented Tab Selector - Custom Segmented Pill Control
+        Surface(
+            color = DarkCard,
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(0.5.dp, CardBorder),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 16.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(DarkCard)
-                .padding(4.dp)
+                .height(44.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (activeSubTab == 0) CyberTeal.copy(alpha = 0.15f) else Color.Transparent)
-                    .clickable { activeSubTab = 0 }
-                    .padding(vertical = 12.dp),
-                contentAlignment = Alignment.Center
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = string("routing_tab_apps"),
-                    color = if (activeSubTab == 0) CyberTeal else TextWhite,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
-                    letterSpacing = 1.sp
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (activeSubTab == 1) CyberTeal.copy(alpha = 0.15f) else Color.Transparent)
-                    .clickable { activeSubTab = 1 }
-                    .padding(vertical = 12.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = string("routing_tab_network"),
-                    color = if (activeSubTab == 1) CyberTeal else TextWhite,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
-                    letterSpacing = 1.sp
-                )
+                listOf(
+                    0 to string("routing_tab_apps"),
+                    1 to string("routing_tab_network")
+                ).forEach { (index, label) ->
+                    val isSelected = activeSubTab == index
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .padding(3.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isSelected) CyberTeal else Color.Transparent)
+                            .clickable(
+                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                indication = null
+                            ) { activeSubTab = index }
+                    ) {
+                        Text(
+                            text = label,
+                            color = if (isSelected) DarkBg else TextWhite,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                    }
+                }
             }
         }
 

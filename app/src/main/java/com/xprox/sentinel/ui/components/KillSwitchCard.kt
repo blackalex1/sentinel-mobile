@@ -19,51 +19,41 @@ import com.xprox.sentinel.theme.*
 fun KillSwitchCard(context: Context) {
     var killSwitchEnabled by remember { mutableStateOf(XrayProfilePersistence.loadKillSwitch(context)) }
 
-    Card(
-        colors = CardDefaults.cardColors(containerColor = DarkCard),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp)),
-        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(CardBorder))
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
+    SentinelSettingsCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = string("kill_switch_title"),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextWhite,
-                        letterSpacing = 1.sp
-                    )
-                    Text(
-                        text = string("kill_switch_desc"),
-                        fontSize = 10.sp,
-                        color = TextGray,
-                        modifier = Modifier.padding(top = 4.dp, end = 8.dp)
-                    )
-                }
-
-                Switch(
-                    checked = killSwitchEnabled,
-                    onCheckedChange = { checked ->
-                        killSwitchEnabled = checked
-                        XrayProfilePersistence.saveKillSwitch(context, checked)
-                    },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = CyberTeal,
-                        checkedTrackColor = CyberTeal.copy(alpha = 0.5f),
-                        uncheckedThumbColor = TextGray,
-                        uncheckedTrackColor = CardBorder
-                    )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = string("kill_switch_title"),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextWhite,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = string("kill_switch_desc"),
+                    fontSize = 10.sp,
+                    color = TextGray,
+                    modifier = Modifier.padding(top = 4.dp, end = 8.dp)
                 )
             }
+
+            Switch(
+                checked = killSwitchEnabled,
+                onCheckedChange = { checked ->
+                    killSwitchEnabled = checked
+                    XrayProfilePersistence.saveKillSwitch(context, checked)
+                },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = CyberTeal,
+                    checkedTrackColor = CyberTeal.copy(alpha = 0.5f),
+                    uncheckedThumbColor = TextGray,
+                    uncheckedTrackColor = CardBorder
+                )
+            )
         }
     }
 }

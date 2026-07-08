@@ -189,7 +189,10 @@ class VpnManagerService : VpnService() {
         wakeLock = pm.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
             "Sentinel:VpnSession"
-        ).also { it.acquire() }
+        ).also { 
+            it.setReferenceCounted(false)
+            it.acquire() 
+        }
 
         try {
             // Setup Log Rotation at the start of a new VPN session (wipes active, shifts & saves 5 historical sessions)
@@ -325,6 +328,15 @@ class VpnManagerService : VpnService() {
                 // Enforce default routing through our secure tunnel interface
                 .addRoute("0.0.0.0", 0)
                 .addRoute("::", 0)
+
+            // If Kill Switch is NOT active, allow apps to bypass the VPN for direct network access
+            val isKillSwitchActive = XrayProfilePersistence.loadKillSwitch(this)
+            if (!isKillSwitchActive) {
+                builder.allowBypass()
+                Log.i(TAG, "VPN Kill Switch is inactive. Allowing bypass for direct traffic.")
+            } else {
+                Log.i(TAG, "VPN Kill Switch is active. Disallowing bypass for all traffic.")
+            }
 
             // Implement dynamic App Routing (Split Tunneling)
             if (isBypassMode) {

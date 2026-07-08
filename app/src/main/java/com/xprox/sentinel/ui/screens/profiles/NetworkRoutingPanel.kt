@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -73,15 +74,33 @@ fun NetworkRoutingPanel(
         }
     }
 
-    LazyColumn(
+    Card(
+        colors = CardDefaults.cardColors(containerColor = DarkCard),
         modifier = Modifier
             .fillMaxWidth()
             .fillMaxHeight()
-            .clip(RoundedCornerShape(12.dp))
-            .background(DarkCard)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .clip(RoundedCornerShape(20.dp)),
+        border = BorderStroke(
+            width = 1.dp,
+            brush = Brush.horizontalGradient(
+                listOf(CyberTeal.copy(alpha = 0.35f), CyberBlue.copy(alpha = 0.05f))
+            )
+        )
     ) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = DarkBg),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(4.dp)
+                .clip(RoundedCornerShape(16.dp)),
+            border = BorderStroke(0.5.dp, CardBorder)
+        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
         // Section 1: GeoIP Routing rules
         item {
             Text(
@@ -313,4 +332,6 @@ fun NetworkRoutingPanel(
             }
         }
     }
+}
+}
 }
