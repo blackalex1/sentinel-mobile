@@ -60,11 +60,12 @@ object XrayProcessManager {
             
             // Build the process strictly within the app files sandbox directory
             val builder = ProcessBuilder(xrayFile.absolutePath, "-config", configFilePath)
-                .directory(context.filesDir)
+                .directory(binDir)
                 .redirectErrorStream(true)
 
-            // Inject local secure path variables
-            builder.environment()["assets"] = context.filesDir.absolutePath
+            // Inject local secure asset path variables strictly inside binDir
+            builder.environment()["assets"] = binDir.absolutePath
+            builder.environment()["xray.location.asset"] = binDir.absolutePath
             
             if (tunFd != null) {
                 Log.i(TAG, "Duplicating TUN FD $tunFd to parent stdin (FD 0) and inheriting in child")

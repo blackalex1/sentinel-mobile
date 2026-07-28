@@ -1,5 +1,11 @@
 package com.xprox.sentinel.ui.components
 
+import android.content.Context
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
+import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
@@ -25,6 +31,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -43,6 +51,38 @@ fun DashboardRadarButton(
     onPingClick: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
+    val view = LocalView.current
+
+    val vibrator = remember {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+            vibratorManager?.defaultVibrator
+        } else {
+            context.getSystemService(Vibrator::class.java)
+        }
+    }
+
+    fun triggerHapticFeedback() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                if (vibrator?.hasVibrator() == true) {
+                    val effect = VibrationEffect.createOneShot(12L, 255)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        val attrs = android.os.VibrationAttributes.createForUsage(android.os.VibrationAttributes.USAGE_ALARM)
+                        vibrator.vibrate(effect, attrs)
+                    } else {
+                        vibrator.vibrate(effect)
+                    }
+                }
+            } else {
+                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            }
+        } catch (e: Throwable) {
+            // Ignore hardware vibration exception
+        }
+    }
+
     val infiniteTransition = rememberInfiniteTransition(label = "radar")
     
     val pulseRadius by infiniteTransition.animateFloat(
@@ -195,7 +235,10 @@ fun DashboardRadarButton(
                     .clickable(
                         interactionSource = interactionSource,
                         indication = null,
-                        onClick = onClick
+                        onClick = {
+                            triggerHapticFeedback()
+                            onClick()
+                        }
                     ),
                 shape = CircleShape,
                 color = DarkCard,
@@ -244,7 +287,10 @@ fun DashboardRadarButton(
             modifier = if (hasProfile && onPingClick != null) {
                 Modifier
                     .clip(RoundedCornerShape(20.dp))
-                    .clickable { onPingClick() }
+                    .clickable { 
+                        triggerHapticFeedback()
+                        onPingClick() 
+                    }
             } else {
                 Modifier
             }

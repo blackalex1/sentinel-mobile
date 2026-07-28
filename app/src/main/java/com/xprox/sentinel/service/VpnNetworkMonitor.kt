@@ -24,10 +24,12 @@ object VpnNetworkMonitor {
     private val debounceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var reloadJob: Job? = null
 
+    @Synchronized
     fun registerNetworkCallback(
         context: Context,
         onReload: () -> Unit
     ) {
+        unregisterNetworkCallback()
         try {
             val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
             connectivityManager = cm
