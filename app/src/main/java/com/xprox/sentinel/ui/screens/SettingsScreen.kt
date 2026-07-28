@@ -120,5 +120,7 @@ fun SettingsScreen() {
 
         // About & Version Card
         AboutAppCard()
+
+        Spacer(modifier = Modifier.height(96.dp))
     }
 }

@@ -14,9 +14,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -44,7 +41,6 @@ fun LanSharingCard(context: Context) {
     val lanHttpPort by VpnManagerService.activeLanHttpPort.collectAsState()
     val lanSocksPort by VpnManagerService.activeLanSocksPort.collectAsState()
     val isVpnActive by VpnManagerService.isRunningFlow.collectAsState()
-    val clipboardManager = LocalClipboardManager.current
     val coroutineScope = rememberCoroutineScope()
 
     val prefs = remember(context) { context.getSharedPreferences("xprox_prefs", Context.MODE_PRIVATE) }

@@ -25,7 +25,7 @@ fun LanSharingActiveIpsBox(
 ) {
     if (!isVpnActive || activeTetherIps.isEmpty()) return
 
-    val clipboardManager = LocalClipboardManager.current
+    val sysClipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
 
     Card(
         colors = CardDefaults.cardColors(containerColor = DarkBg),
@@ -38,8 +38,7 @@ fun LanSharingActiveIpsBox(
             Text(
                 text = string("active_hotspot_ips"),
                 fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                color = CyberTeal
+                color = TextGray
             )
             Spacer(modifier = Modifier.height(4.dp))
             activeTetherIps.forEach { ip ->
@@ -49,7 +48,7 @@ fun LanSharingActiveIpsBox(
                     fontFamily = FontFamily.Monospace,
                     color = TextWhite,
                     modifier = Modifier.clickable {
-                        clipboardManager.setText(AnnotatedString(ip))
+                        sysClipboard?.setPrimaryClip(android.content.ClipData.newPlainText("IP", ip))
                         Toast.makeText(context, ip, Toast.LENGTH_SHORT).show()
                     }
                 )

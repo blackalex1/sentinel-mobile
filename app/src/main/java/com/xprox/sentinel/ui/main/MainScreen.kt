@@ -4,9 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -31,7 +31,7 @@ import com.xprox.sentinel.data.string
 sealed class Tab(val key: String, val icon: ImageVector) {
     object Dashboard : Tab("tab_dashboard", Icons.Default.Home)
     object Profiles : Tab("tab_profiles", Icons.Default.Info)
-    object Logs : Tab("tab_logs", Icons.Default.List)
+    object Logs : Tab("tab_logs", Icons.AutoMirrored.Filled.List)
     object Settings : Tab("tab_settings", Icons.Default.Settings)
 }
 

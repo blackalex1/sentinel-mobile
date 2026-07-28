@@ -27,6 +27,7 @@ object XrayProfilePersistence {
     // 100–2000 ms on some devices. Recreating it on every call blocks the caller thread.
     @Volatile private var cachedPrefs: android.content.SharedPreferences? = null
 
+    @Suppress("DEPRECATION")
     private fun getEncryptedPrefs(context: Context): android.content.SharedPreferences {
         cachedPrefs?.let { return it }
         return synchronized(this) {
@@ -62,6 +63,10 @@ object XrayProfilePersistence {
                 prefs
             }
         }
+    }
+
+    fun resetCacheForTesting() {
+        cachedPrefs = null
     }
 
     fun saveProfiles(context: Context, profiles: List<XrayConfigManager.ServerProfile>) {
@@ -120,9 +125,11 @@ object XrayProfilePersistence {
             val jsonArray = org.json.JSONArray(jsonStr)
             for (i in 0 until jsonArray.length()) {
                 val json = jsonArray.getJSONObject(i)
+                val readId = json.optString("id", "")
+                val profileId = if (readId.isNotEmpty()) readId else UUID.randomUUID().toString()
                 profiles.add(
                     XrayConfigManager.ServerProfile(
-                        id = json.optString("id", UUID.randomUUID().toString()),
+                        id = profileId,
                         name = json.optString("name", "Imported Server"),
                         address = json.optString("address", ""),
                         port = json.optInt("port", 443),
@@ -163,6 +170,30 @@ object XrayProfilePersistence {
         val prefs = getEncryptedPrefs(context)
         prefs.edit().putString(KEY_SELECTED_PROFILE_ID, id).commit()
         notifyUpdate()
+    }
+
+    /**
+     * Resolves the active ServerProfile based on activeId or prioritizes proxy profiles over DIRECT fallback.
+     */
+    fun resolveActiveProfile(context: Context, forceProfileId: String? = null): XrayConfigManager.ServerProfile? {
+        val activeId = forceProfileId ?: getSelectedProfileId(context)
+        val loadedProfiles = loadProfiles(context)
+        return resolveActiveProfileFromList(loadedProfiles, activeId)
+    }
+
+    fun resolveActiveProfileFromList(
+        profiles: List<XrayConfigManager.ServerProfile>,
+        activeId: String?
+    ): XrayConfigManager.ServerProfile? {
+        if (profiles.isEmpty()) return null
+
+        val matched = profiles.firstOrNull { it.id == activeId }
+        if (matched != null) return matched
+
+        val proxyProfile = profiles.firstOrNull { it.type.uppercase() != "DIRECT" }
+        if (proxyProfile != null) return proxyProfile
+
+        return profiles.first()
     }
 
     private const val KEY_ALLOWED_APPS = "xprox_allowed_apps_list"
@@ -320,7 +351,7 @@ object XrayProfilePersistence {
             loadLanSharingUsername(context)
             value = prefs.getString(KEY_LAN_SHARING_PASSWORD, "") ?: ""
         }
-        return value ?: ""
+        return value
     }
 
     fun saveLanSharingHttpPort(context: Context, value: Int) {

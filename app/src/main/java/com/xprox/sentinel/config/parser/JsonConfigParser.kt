@@ -144,7 +144,10 @@ object JsonConfigParser {
                 else -> protocol.uppercase()
             }
 
+            val stableId = java.util.UUID.nameUUIDFromBytes("${groupId}_${name}_${address}_${port}_${uuid}".toByteArray()).toString()
+
             return ServerProfile(
+                id = stableId,
                 name = name,
                 address = address,
                 port = port,

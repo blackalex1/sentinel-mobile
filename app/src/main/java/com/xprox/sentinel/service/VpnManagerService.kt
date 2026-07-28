@@ -73,12 +73,10 @@ class VpnManagerService : VpnService() {
 
         fun loadSelectedProfile(context: Context, forceProfileId: String? = null) {
             try {
-                val activeId = forceProfileId ?: XrayProfilePersistence.getSelectedProfileId(context)
-                val loadedProfiles = XrayProfilePersistence.loadProfiles(context)
-                val selected = loadedProfiles.firstOrNull { it.id == activeId } ?: loadedProfiles.firstOrNull()
+                val selected = XrayProfilePersistence.resolveActiveProfile(context, forceProfileId)
                 if (selected != null) {
                     selectedProfile = selected
-                    Log.i(TAG, "Successfully loaded active profile from persistence: ${selected.name}")
+                    Log.i(TAG, "Successfully loaded active profile from persistence: ${selected.name} (${selected.id})")
                 }
             } catch (e: java.lang.Exception) {
                 Log.e(TAG, "Failed to load selected profile from persistence", e)
@@ -145,16 +143,13 @@ class VpnManagerService : VpnService() {
         if (intent?.action == ACTION_RESTART_PROCESS) {
             Log.i(TAG, "Restart process action received. Relaunching native core.")
             if (_isRunningFlow.value) {
-                if (XrayProcessManager.isInstalled(this) && activeRawFd != -1) {
-                    val configFile = File(filesDir, "secure_xray_config.json")
-                    if (configFile.exists()) {
-                        XrayProcessManager.stopProcess()
-                        XrayProcessManager.startProcess(this, configFile.absolutePath, activeRawFd)
-                        Log.i(TAG, "Native process successfully restarted from unexpected exit")
-                    } else {
-                        reloadVpnConfig()
-                    }
-                } else {
+                val configFile = File(filesDir, "secure_xray_config.json")
+                val restarted = com.xprox.sentinel.service.vpn.VpnProcessSupervisor.startOrRestartCoreProcess(
+                    context = this,
+                    configFile = configFile,
+                    activeRawFd = activeRawFd
+                )
+                if (!restarted) {
                     reloadVpnConfig()
                 }
             }
@@ -498,8 +493,20 @@ class VpnManagerService : VpnService() {
     private fun reloadVpnConfig() {
         if (!_isRunningFlow.value) return
         try {
-            Log.i(TAG, "Reloading VPN and Xray config dynamically...")
+            Log.i(TAG, "Reloading VPN and Xray config dynamically for profile: ${selectedProfile.name} (${selectedProfile.id})...")
             
+            // Pre-resolve server hostname for the newly selected profile
+            resolvedServerIp = null
+            if (selectedProfile.address.isNotEmpty()) {
+                try {
+                    val addressObj = java.net.InetAddress.getByName(selectedProfile.address)
+                    resolvedServerIp = addressObj.hostAddress
+                    Log.i(TAG, "Reload: Pre-resolved VPN server hostname ${selectedProfile.address} to $resolvedServerIp")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Reload: Failed to pre-resolve VPN server hostname: ${selectedProfile.address}", e)
+                }
+            }
+
             // 1. Re-compile secure configuration file
             val isLocalProxyRandomize = XrayProfilePersistence.loadLocalProxyRandomize(this)
             val creds = _activeCredentials.value ?: if (isLocalProxyRandomize) {
@@ -538,8 +545,11 @@ class VpnManagerService : VpnService() {
                 Log.i(TAG, "Restarting native Xray core dynamically using Raw FD: $activeRawFd")
                 XrayProcessManager.stopProcess()
                 XrayProcessManager.startProcess(this, configFile.absolutePath, activeRawFd)
-                Log.i(TAG, "Native Xray core successfully restarted with updated Zero Trust blackhole rules")
+                Log.i(TAG, "Native Xray core successfully restarted for profile: ${selectedProfile.name}")
                 
+                _publicIpFlow.value = null
+                _pingMsFlow.value = null
+
                 // Fetch public IP of the new profile connection through SOCKS5 proxy
                 serviceScope.launch {
                     delay(1500)
@@ -554,6 +564,14 @@ class VpnManagerService : VpnService() {
                             if (!_isRunningFlow.value) break
                             delay(3000)
                         }
+                    }
+                }
+                
+                // Measure ping for the newly reloaded profile
+                serviceScope.launch {
+                    delay(1500)
+                    VpnNetworkHelper.measureProfilePing(selectedProfile, _pingMsFlow) { socket ->
+                        protect(socket)
                     }
                 }
             } else {
@@ -644,7 +662,12 @@ class VpnManagerService : VpnService() {
         _activeLanHttpPort.value = 10809
         _activeLanSocksPort.value = 10808
         VpnNetworkMonitor.unregisterNetworkCallback()
-        stopForeground(true)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
     }
 
     private fun getActiveTetheringIps(): List<String> = TetheringScanner.getActiveTetheringIps()

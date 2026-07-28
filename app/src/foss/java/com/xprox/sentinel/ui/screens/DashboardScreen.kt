@@ -15,10 +15,9 @@ import kotlinx.coroutines.launch
 import androidx.compose.runtime.*
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -38,7 +37,7 @@ import com.xprox.sentinel.ui.screens.dashboard.*
 @Composable
 fun DashboardScreen(onNavigateToSettings: () -> Unit = {}) {
     val context = LocalContext.current
-    val clipboardManager = LocalClipboardManager.current
+    val sysClipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
     val isRunning by VpnManagerService.isRunningFlow.collectAsState()
     val activePort by VpnManagerService.activePortFlow.collectAsState()
     // Server Profiles list & Active selection state
@@ -72,15 +71,11 @@ fun DashboardScreen(onNavigateToSettings: () -> Unit = {}) {
             val loadedProfiles = XrayProfilePersistence.loadProfiles(context)
             profiles = loadedProfiles
             
-            val activeId = XrayProfilePersistence.getSelectedProfileId(context)
-            if (loadedProfiles.isNotEmpty()) {
-                val selected = loadedProfiles.firstOrNull { it.id == activeId } ?: loadedProfiles.first()
+            val selected = XrayProfilePersistence.resolveActiveProfile(context)
+            if (selected != null) {
                 if (activeProfile.id != selected.id || activeProfile.name != selected.name || activeProfile.address != selected.address) {
                     activeProfile = selected
                     VpnManagerService.selectedProfile = selected
-                    if (activeId != selected.id) {
-                        XrayProfilePersistence.setSelectedProfileId(context, selected.id)
-                    }
                 }
             } else {
                 val empty = XrayConfigManager.ServerProfile(
@@ -107,9 +102,8 @@ fun DashboardScreen(onNavigateToSettings: () -> Unit = {}) {
                 val loadedProfiles = XrayProfilePersistence.loadProfiles(context)
                 profiles = loadedProfiles
                 
-                val activeId = XrayProfilePersistence.getSelectedProfileId(context)
-                if (loadedProfiles.isNotEmpty()) {
-                    val selected = loadedProfiles.firstOrNull { it.id == activeId } ?: loadedProfiles.first()
+                val selected = XrayProfilePersistence.resolveActiveProfile(context)
+                if (selected != null) {
                     activeProfile = selected
                     VpnManagerService.selectedProfile = selected
                     
@@ -129,15 +123,10 @@ fun DashboardScreen(onNavigateToSettings: () -> Unit = {}) {
     // Keep service reference updated when active profile state changes
     var isFirstLoad by remember { mutableStateOf(true) }
     LaunchedEffect(activeProfile) {
-        // Capture the old ID BEFORE overwriting the static field to avoid a race
-        // condition where oldProfile.id already equals the new ID by comparison time.
-        val oldId = VpnManagerService.selectedProfile.id
-        VpnManagerService.selectedProfile = activeProfile
-        
         if (isFirstLoad) {
             isFirstLoad = false
         } else {
-            if (isRunning && oldId != activeProfile.id) {
+            if (isRunning) {
                 val reloadIntent = android.content.Intent(context, VpnManagerService::class.java).apply {
                     action = VpnManagerService.ACTION_RELOAD_CONFIG
                     putExtra("EXTRA_PROFILE_ID", activeProfile.id)
@@ -258,6 +247,7 @@ fun DashboardScreen(onNavigateToSettings: () -> Unit = {}) {
             isRunning = isRunning,
             pingMs = pingMs,
             publicIp = publicIp,
+            speedText = connectionSpeed,
             hasProfile = activeProfile.address.isNotEmpty() || activeProfile.type.uppercase() == "DIRECT",
             onPingClick = {
                 if (activeProfile.type.uppercase() != "DIRECT" && activeProfile.address.isNotEmpty()) {
@@ -302,18 +292,14 @@ fun DashboardScreen(onNavigateToSettings: () -> Unit = {}) {
         // Display Active Profile Warning/Info
         ActiveProfileBox(activeProfile = activeProfile, isRunning = isRunning)
 
-        // Live connection speed & telemetry HUD
-        TelemetryHudCard(
-            isRunning = isRunning,
-            speedText = connectionSpeed,
-            isRu = isRu
-        )
-
         // Connection Profiles Section
         Column(modifier = Modifier.fillMaxWidth()) {
             ProfileActionsHeader(
                 onImportClipboard = {
-                    val clipText = clipboardManager.getText()?.text
+                    val clipData = sysClipboard?.primaryClip
+                    val clipText = if (clipData != null && clipData.itemCount > 0) {
+                        clipData.getItemAt(0).coerceToText(context)?.toString()
+                    } else null
                     if (clipText.isNullOrEmpty()) {
                         Toast.makeText(context, LanguageManager.getString("clipboard_empty"), Toast.LENGTH_SHORT).show()
                     } else {
@@ -409,9 +395,19 @@ fun DashboardScreen(onNavigateToSettings: () -> Unit = {}) {
                         profilePings = profilePings,
                         isRu = isRu,
                         onSelect = { profile ->
+                            val previousId = activeProfile.id
                             activeProfile = profile
+                            VpnManagerService.selectedProfile = profile
                             XrayProfilePersistence.setSelectedProfileId(context, profile.id)
                             VpnManagerService.measureProfilePing(profile)
+                            
+                            if (isRunning && previousId != profile.id) {
+                                val reloadIntent = android.content.Intent(context, VpnManagerService::class.java).apply {
+                                    action = VpnManagerService.ACTION_RELOAD_CONFIG
+                                    putExtra("EXTRA_PROFILE_ID", profile.id)
+                                }
+                                context.startService(reloadIntent)
+                            }
                         },
                         onEdit = { profile ->
                             editingProfile = profile
@@ -465,7 +461,8 @@ fun DashboardScreen(onNavigateToSettings: () -> Unit = {}) {
                                 Toast.makeText(context, LanguageManager.getString("direct_export_error"), Toast.LENGTH_SHORT).show()
                             } else {
                                 val link = ProxyLinkParser.export(profile)
-                                clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(link))
+                                val clipData = android.content.ClipData.newPlainText("Proxy Link", link)
+                                sysClipboard?.setPrimaryClip(clipData)
                                 val protocol = profile.type.uppercase()
                                 Toast.makeText(
                                     context,

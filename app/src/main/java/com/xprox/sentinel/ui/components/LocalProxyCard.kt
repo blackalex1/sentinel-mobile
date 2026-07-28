@@ -10,8 +10,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -30,7 +28,7 @@ fun LocalProxyCard(context: Context) {
 
     val isVpnActive by VpnManagerService.isRunningFlow.collectAsState()
     val activeCredentials by VpnManagerService.activeCredentials.collectAsState()
-    val clipboardManager = LocalClipboardManager.current
+    val sysClipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
     val coroutineScope = rememberCoroutineScope()
 
     val displayUsername = remember(isVpnActive, activeCredentials, isRandomizeEnabled, refreshTrigger) {
@@ -183,7 +181,7 @@ fun LocalProxyCard(context: Context) {
                     ).show()
                 },
                 onCopy = { text, successMsg ->
-                    clipboardManager.setText(AnnotatedString(text))
+                    sysClipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Credentials", text))
                     Toast.makeText(context, successMsg, Toast.LENGTH_SHORT).show()
                 }
             )

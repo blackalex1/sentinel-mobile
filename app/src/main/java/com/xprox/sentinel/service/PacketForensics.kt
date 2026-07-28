@@ -292,10 +292,19 @@ object PacketForensics {
         packetBytes: ByteArray,
         timestampMs: Long
     ) {
-        val appContext = context.applicationContext
+        val appContext = context.applicationContext ?: context
         val bytesCopy = packetBytes.clone()
-        executor.execute {
+        val isUnitTest = try {
+            !(System.getProperty("java.vm.name") ?: "").contains("Dalvik", ignoreCase = true)
+        } catch (e: Exception) {
+            false
+        }
+        if (isUnitTest) {
             writePacketToPcapInternal(appContext, packageName, bytesCopy, timestampMs)
+        } else {
+            executor.execute {
+                writePacketToPcapInternal(appContext, packageName, bytesCopy, timestampMs)
+            }
         }
     }
 

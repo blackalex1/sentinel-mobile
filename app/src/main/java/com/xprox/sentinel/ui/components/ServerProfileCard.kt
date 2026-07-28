@@ -5,6 +5,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
@@ -16,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -39,6 +41,8 @@ fun ServerProfileCard(
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
+
+    val cardShape = RoundedCornerShape(12.dp)
 
     if (showDeleteConfirmation) {
         AlertDialog(
@@ -91,20 +95,20 @@ fun ServerProfileCard(
         )
     }
 
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) CyberTeal.copy(alpha = 0.08f) else DarkCard
-        ),
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(
-                onClick = { onSelect() },
-                onLongClick = { menuExpanded = true }
-            ),
+    Surface(
+        color = if (isSelected) CyberTeal.copy(alpha = 0.08f) else DarkCard,
+        shape = cardShape,
         border = BorderStroke(
             1.dp, 
             if (isSelected) CyberTeal else CardBorder
-        )
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(cardShape)
+            .combinedClickable(
+                onClick = { onSelect() },
+                onLongClick = { menuExpanded = true }
+            )
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
@@ -172,6 +176,7 @@ fun ServerProfileCard(
                         fontWeight = FontWeight.Bold,
                         color = pingColor,
                         modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
                             .clickable { onPingClick() }
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     )

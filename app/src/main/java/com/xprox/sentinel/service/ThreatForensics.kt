@@ -21,70 +21,7 @@ object ThreatForensics {
      * Gathers extremely thorough, system-wide hardware, OS, and status metadata for security forensics.
      */
     fun getDeviceMetadata(context: Context): JSONObject {
-        val json = JSONObject()
-        try {
-            // Hardware Specs
-            json.put("manufacturer", Build.MANUFACTURER)
-            json.put("brand", Build.BRAND)
-            json.put("model", Build.MODEL)
-            json.put("device", Build.DEVICE)
-            json.put("board", Build.BOARD)
-            json.put("hardware", Build.HARDWARE)
-            json.put("supportedAbis", org.json.JSONArray(Build.SUPPORTED_ABIS.toList()))
-
-            // OS details
-            json.put("androidVersion", Build.VERSION.RELEASE)
-            json.put("sdkInt", Build.VERSION.SDK_INT)
-            json.put("buildId", Build.ID)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                json.put("securityPatch", Build.VERSION.SECURITY_PATCH)
-            }
-            json.put("fingerprint", Build.FINGERPRINT)
-            json.put("bootloader", Build.BOOTLOADER)
-
-            // System Specs (RAM)
-            val actManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
-            val memInfo = android.app.ActivityManager.MemoryInfo()
-            actManager?.getMemoryInfo(memInfo)
-            json.put("totalRamGb", String.format(Locale.US, "%.2f", memInfo.totalMem.toDouble() / (1024 * 1024 * 1024)))
-            json.put("availRamGb", String.format(Locale.US, "%.2f", memInfo.availMem.toDouble() / (1024 * 1024 * 1024)))
-
-            // Storage Specs
-            val path = android.os.Environment.getDataDirectory()
-            val stat = android.os.StatFs(path.path)
-            val blockSize = stat.blockSizeLong
-            val totalBlocks = stat.blockCountLong
-            val availBlocks = stat.availableBlocksLong
-            json.put("totalStorageGb", String.format(Locale.US, "%.2f", (totalBlocks * blockSize).toDouble() / (1024 * 1024 * 1024)))
-            json.put("availStorageGb", String.format(Locale.US, "%.2f", (availBlocks * blockSize).toDouble() / (1024 * 1024 * 1024)))
-
-            // Root status check
-            var isRooted = false
-            val paths = arrayOf(
-                "/system/app/Superuser.apk", "/sbin/su", "/system/bin/su",
-                "/system/xbin/su", "/data/local/xbin/su", "/data/local/bin/su",
-                "/system/sd/xbin/su", "/system/bin/failsafe/su", "/data/local/su"
-            )
-            for (p in paths) {
-                if (java.io.File(p).exists()) {
-                    isRooted = true
-                    break
-                }
-            }
-            if (Build.TAGS != null && Build.TAGS.contains("test-keys")) {
-                isRooted = true
-            }
-            json.put("rootDetected", isRooted)
-
-            // General specs
-            json.put("locale", Locale.getDefault().toString())
-            json.put("timezone", TimeZone.getDefault().id)
-            json.put("uptimeHrs", String.format(Locale.US, "%.2f", android.os.SystemClock.elapsedRealtime().toDouble() / (1000 * 60 * 60)))
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to compile device metadata", e)
-        }
-        return json
+        return com.xprox.sentinel.service.threats.ThreatLogBuffer.getDeviceMetadata(context)
     }
 
     /**
@@ -108,7 +45,7 @@ object ThreatForensics {
                             android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_PERCEPTIBLE -> "PERCEPTIBLE (ФОНОВОЕ ЗАМЕТНОЕ)"
                             android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE -> "VISIBLE (АКТИВНОЕ ВИДИМОЕ)"
                             android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_SERVICE -> "BACKGROUND_SERVICE (ФОНОВАЯ СЛУЖБА)"
-                            android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_BACKGROUND -> "BACKGROUND (ФОНОВОЕ)"
+                            400 -> "BACKGROUND (ФОНОВОЕ)"
                             else -> "OTHER (${info.importance})"
                         }
                         json.put("importanceString", importanceStr)
@@ -241,8 +178,8 @@ object ThreatForensics {
                 }
                 
                 val packageInfo = pm.getPackageInfo(packageName, flags)
-                
-                version = "${packageInfo.versionName} (${if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) packageInfo.longVersionCode else packageInfo.versionCode})"
+                val versionCodeLong = androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(packageInfo)
+                version = "${packageInfo.versionName} ($versionCodeLong)"
                 installTime = dateFormat.format(Date(packageInfo.firstInstallTime))
                 lastUpdateTime = dateFormat.format(Date(packageInfo.lastUpdateTime))
                 sharedUserId = packageInfo.sharedUserId ?: "None"

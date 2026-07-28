@@ -209,16 +209,25 @@ object LogManager {
     }
 
     private fun writeLogToFile(context: Context, entry: LogEntry) {
-        val appContext = context.applicationContext
-        logExecutor.execute {
+        val isUnitTest = try {
+            !(System.getProperty("java.vm.name") ?: "").contains("Dalvik", ignoreCase = true)
+        } catch (e: Exception) {
+            false
+        }
+        val appContext = context.applicationContext ?: context
+        if (isUnitTest) {
             writeLogToFileInternal(appContext, entry)
+        } else {
+            logExecutor.execute {
+                writeLogToFileInternal(appContext, entry)
+            }
         }
     }
 
     @Synchronized
     private fun writeLogToFileInternal(context: Context, entry: LogEntry) {
         try {
-            val directory = context.filesDir
+            val directory = context.filesDir ?: return
             val logFile = File(directory, LOG_FILE_NAME)
             
             // Format log: [TIMESTAMP] [ALERT: SSH] [Telegram (com.telegram.org)] -> [192.168.1.10:22]

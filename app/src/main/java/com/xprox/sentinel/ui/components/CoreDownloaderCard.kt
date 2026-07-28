@@ -27,6 +27,10 @@ import com.xprox.sentinel.data.string
 import com.xprox.sentinel.ui.components.coredownloader.*
 import kotlinx.coroutines.launch
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import com.xprox.sentinel.service.XrayReleaseInfo
+
 @Composable
 fun CoreDownloaderCard(
     context: Context,
@@ -36,16 +40,21 @@ fun CoreDownloaderCard(
 
     var isXrayInstalled by remember { mutableStateOf(XrayProcessManager.isInstalled(context)) }
     var installedVersion by remember(isXrayInstalled) { mutableStateOf(XrayCoreDownloader.getInstalledVersion(context)) }
+    var allowPrerelease by remember { mutableStateOf(XrayCoreDownloader.getAllowPrerelease(context)) }
     var latestVersion by remember { mutableStateOf<String?>(null) }
+    var availableReleases by remember { mutableStateOf<List<XrayReleaseInfo>>(emptyList()) }
+    var showVersionDialog by remember { mutableStateOf(false) }
     var isChecking by remember { mutableStateOf(false) }
     var downloadProgress by remember { mutableStateOf(0f) }
     var isDownloading by remember { mutableStateOf(false) }
     var downloadStatusText by remember { mutableStateOf(LanguageManager.getString("core_status_downloading")) }
 
-    val triggerCheckUpdates = {
+    val triggerCheckUpdates: (Boolean) -> Unit = { pr ->
         isChecking = true
         coroutineScope.launch {
-            val latest = XrayCoreDownloader.fetchLatestVersion()
+            val releases = XrayCoreDownloader.fetchAvailableReleases(pr)
+            availableReleases = releases
+            val latest = releases.firstOrNull()?.tagName ?: XrayCoreDownloader.fetchLatestVersion(pr)
             isChecking = false
             if (latest != null) {
                 latestVersion = latest
@@ -55,7 +64,7 @@ fun CoreDownloaderCard(
         }
     }
 
-    val triggerUpdateConfirm = {
+    val triggerUpdateConfirm: (String) -> Unit = { targetVersion ->
         isDownloading = true
         downloadStatusText = LanguageManager.getString("core_status_updating")
         coroutineScope.launch {
@@ -65,117 +74,269 @@ fun CoreDownloaderCard(
                 kotlinx.coroutines.delay(1000)
             }
             
-            val success = XrayCoreDownloader.downloadAndInstall(context, latestVersion!!) { progress ->
+            val success = XrayCoreDownloader.downloadAndInstall(context, targetVersion) { progress ->
                 downloadProgress = progress
             }
             isDownloading = false
             isXrayInstalled = success
             if (success) {
-                installedVersion = latestVersion!!
-                Toast.makeText(context, "Xray-core successfully updated to $latestVersion!", Toast.LENGTH_SHORT).show()
+                installedVersion = targetVersion
+                latestVersion = targetVersion
+                Toast.makeText(context, "Xray-core successfully installed ($targetVersion)!", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(context, "Update failed. Check internet connection.", Toast.LENGTH_LONG).show()
             }
         }
     }
 
-    Card(
-        colors = CardDefaults.cardColors(containerColor = DarkCard),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp)),
-        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(CardBorder))
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = if (isXrayInstalled) Icons.Default.CheckCircle else Icons.Default.Warning,
-                        contentDescription = "Core Status",
-                        tint = if (isXrayInstalled) SecureGreen else WarningRed,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
+    if (showVersionDialog) {
+        AlertDialog(
+            onDismissRequest = { showVersionDialog = false },
+            title = {
+                Text(
+                    text = string("core_select_version_title"),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextWhite
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 350.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    if (availableReleases.isEmpty()) {
                         Text(
-                            text = if (isXrayInstalled) string("core_installed") else string("core_not_installed"),
-                            fontSize = 14.sp,
-                            color = TextWhite,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = if (isXrayInstalled) "${string("core_version_label")}: $installedVersion" else string("core_requires_download"),
-                            fontSize = 11.sp,
+                            text = string("core_checking_github"),
+                            fontSize = 12.sp,
                             color = TextGray
                         )
-                    }
-                }
-            }
-
-            if (isDownloading) {
-                DownloadProgressBar(
-                    downloadStatusText = downloadStatusText,
-                    downloadProgress = downloadProgress
-                )
-            }
-
-            if (isXrayInstalled && !isDownloading) {
-                CoreUpdatePanel(
-                    isChecking = isChecking,
-                    latestVersion = latestVersion,
-                    installedVersion = installedVersion,
-                    isVpnActive = isVpnActive,
-                    onCheckUpdates = { triggerCheckUpdates() },
-                    onUpdateConfirm = { triggerUpdateConfirm() }
-                )
-                
-                Spacer(modifier = Modifier.height(10.dp))
-                
-                Button(
-                    onClick = {
-                        isDownloading = true
-                        downloadStatusText = LanguageManager.getString("core_status_updating_dbs")
-                        coroutineScope.launch {
-                            if (isVpnActive) {
-                                val intent = Intent(context, VpnManagerService::class.java)
-                                context.stopService(intent)
-                                kotlinx.coroutines.delay(1000)
-                            }
-                            
-                            val targetVer = latestVersion ?: installedVersion
-                            val success = XrayCoreDownloader.downloadDatabasesOnly(context, targetVer) { progress ->
-                                downloadProgress = progress
-                            }
-                            isDownloading = false
-                            isXrayInstalled = XrayProcessManager.isInstalled(context)
-                            if (success) {
-                                Toast.makeText(context, "GeoIP/GeoSite databases successfully updated!", Toast.LENGTH_SHORT).show()
-                            } else {
-                                Toast.makeText(context, "Database update failed. Check internet connection.", Toast.LENGTH_LONG).show()
+                    } else {
+                        availableReleases.forEach { release ->
+                            val isSelected = release.tagName == latestVersion
+                            Card(
+                                onClick = {
+                                    latestVersion = release.tagName
+                                    showVersionDialog = false
+                                },
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isSelected) CyberTeal.copy(alpha = 0.15f) else DarkBg
+                                ),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSelected) CyberTeal else CardBorder
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp)
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = release.tagName,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isSelected) CyberTeal else TextWhite
+                                        )
+                                        if (release.publishedAt.isNotEmpty()) {
+                                            Text(
+                                                text = release.publishedAt.take(10),
+                                                fontSize = 11.sp,
+                                                color = TextGray
+                                            )
+                                        }
+                                    }
+                                    if (release.isPrerelease) {
+                                        Surface(
+                                            color = WarningRed.copy(alpha = 0.2f),
+                                            shape = RoundedCornerShape(4.dp),
+                                            border = BorderStroke(1.dp, WarningRed)
+                                        ) {
+                                            Text(
+                                                text = string("core_prerelease_badge"),
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = WarningRed,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    } else {
+                                        Surface(
+                                            color = SecureGreen.copy(alpha = 0.15f),
+                                            shape = RoundedCornerShape(4.dp),
+                                            border = BorderStroke(1.dp, SecureGreen)
+                                        ) {
+                                            Text(
+                                                text = string("core_release_badge"),
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = SecureGreen,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = DarkBg),
-                    modifier = Modifier.fillMaxWidth(),
-                    border = BorderStroke(1.dp, CardBorder)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh, 
-                        contentDescription = "Update Databases", 
-                        tint = CyberTeal
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showVersionDialog = false }) {
+                    Text(string("cancel"), color = CyberTeal)
+                }
+            },
+            containerColor = DarkCard
+        )
+    }
+
+    SentinelSettingsCard {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = if (isXrayInstalled) Icons.Default.CheckCircle else Icons.Default.Warning,
+                    contentDescription = "Core Status",
+                    tint = if (isXrayInstalled) SecureGreen else WarningRed,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
                     Text(
-                        text = string("core_update_dbs"), 
-                        color = CyberTeal, 
+                        text = if (isXrayInstalled) string("core_installed") else string("core_not_installed"),
+                        fontSize = 14.sp,
+                        color = TextWhite,
                         fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = if (isXrayInstalled) "${string("core_version_label")}: $installedVersion" else string("core_requires_download"),
+                        fontSize = 11.sp,
+                        color = TextGray
                     )
                 }
             }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Allow Pre-release toggle switch row
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = string("core_allow_prerelease"),
+                    fontSize = 13.sp,
+                    color = TextWhite,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = string("core_allow_prerelease_desc"),
+                    fontSize = 11.sp,
+                    color = TextGray
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Switch(
+                checked = allowPrerelease,
+                onCheckedChange = { checked ->
+                    allowPrerelease = checked
+                    XrayCoreDownloader.setAllowPrerelease(context, checked)
+                    triggerCheckUpdates(checked)
+                },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = DarkBg,
+                    checkedTrackColor = CyberTeal,
+                    uncheckedThumbColor = TextGray,
+                    uncheckedTrackColor = DarkBg
+                )
+            )
+        }
+
+        if (isDownloading) {
+            DownloadProgressBar(
+                downloadStatusText = downloadStatusText,
+                downloadProgress = downloadProgress
+            )
+        }
+
+        if (isXrayInstalled && !isDownloading) {
+            val isCurrentPrerelease = availableReleases.firstOrNull { it.tagName == latestVersion }?.isPrerelease ?: false
+            CoreUpdatePanel(
+                isChecking = isChecking,
+                latestVersion = latestVersion,
+                installedVersion = installedVersion,
+                isVpnActive = isVpnActive,
+                isPrerelease = isCurrentPrerelease,
+                onCheckUpdates = { triggerCheckUpdates(allowPrerelease) },
+                onUpdateConfirm = { triggerUpdateConfirm(latestVersion ?: installedVersion) },
+                onSelectVersionClick = {
+                    if (availableReleases.isEmpty()) {
+                        triggerCheckUpdates(allowPrerelease)
+                    }
+                    showVersionDialog = true
+                }
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Button(
+                onClick = {
+                    isDownloading = true
+                    downloadStatusText = LanguageManager.getString("core_status_updating_dbs")
+                    coroutineScope.launch {
+                        if (isVpnActive) {
+                            val intent = Intent(context, VpnManagerService::class.java)
+                            context.stopService(intent)
+                            kotlinx.coroutines.delay(1000)
+                        }
+                        
+                        val targetVer = latestVersion ?: installedVersion
+                        val success = XrayCoreDownloader.downloadDatabasesOnly(context, targetVer) { progress ->
+                            downloadProgress = progress
+                        }
+                        isDownloading = false
+                        isXrayInstalled = XrayProcessManager.isInstalled(context)
+                        if (success) {
+                            Toast.makeText(context, "GeoIP/GeoSite databases successfully updated!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "Database update failed. Check internet connection.", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = DarkBg),
+                modifier = Modifier.fillMaxWidth().height(38.dp),
+                border = BorderStroke(1.dp, CardBorder),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Refresh, 
+                    contentDescription = "Update Databases", 
+                    tint = CyberTeal,
+                    modifier = Modifier.size(15.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = string("core_update_dbs"), 
+                    color = CyberTeal, 
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
 
             if (!isXrayInstalled && !isDownloading) {
                 Spacer(modifier = Modifier.height(16.dp))
@@ -184,7 +345,7 @@ fun CoreDownloaderCard(
                         isDownloading = true
                         downloadStatusText = LanguageManager.getString("core_status_downloading")
                         coroutineScope.launch {
-                            val targetVer = XrayCoreDownloader.fetchLatestVersion() ?: "v26.3.27"
+                            val targetVer = latestVersion ?: XrayCoreDownloader.fetchLatestVersion(allowPrerelease) ?: "v26.3.27"
                             val success = XrayCoreDownloader.downloadAndInstall(context, targetVer) { progress ->
                                 downloadProgress = progress
                             }
@@ -208,4 +369,3 @@ fun CoreDownloaderCard(
             }
         }
     }
-}

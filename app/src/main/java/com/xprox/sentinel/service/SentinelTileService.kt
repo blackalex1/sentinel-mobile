@@ -53,6 +53,7 @@ class SentinelTileService : TileService() {
         Log.i(TAG, "Tile stopped listening")
     }
 
+    @Suppress("DEPRECATION")
     override fun onClick() {
         super.onClick()
         Log.i(TAG, "Tile clicked")
@@ -89,9 +90,7 @@ class SentinelTileService : TileService() {
         } else {
             // Connect VPN tunnel
             // First load active server profile to ensure one is configured
-            val activeId = XrayProfilePersistence.getSelectedProfileId(context)
-            val loadedProfiles = XrayProfilePersistence.loadProfiles(context)
-            val selected = loadedProfiles.firstOrNull { it.id == activeId } ?: loadedProfiles.firstOrNull()
+            val selected = XrayProfilePersistence.resolveActiveProfile(context)
 
             if (selected == null) {
                 launchApp()
@@ -130,6 +129,7 @@ class SentinelTileService : TileService() {
         }
     }
 
+    @Suppress("DEPRECATION")
     private fun launchApp() {
         val intent = Intent(this, MainActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

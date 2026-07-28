@@ -59,6 +59,9 @@ object LanguageManager {
         "invalid_link" to mapOf(Language.RU to "Некорректная ссылка VLESS Reality!", Language.EN to "Invalid VLESS Reality link!"),
         "latency" to mapOf(Language.RU to "Задержка", Language.EN to "Latency"),
         "public_ip" to mapOf(Language.RU to "Публичный IP", Language.EN to "Public IP"),
+        "dashboard_ip_address_title" to mapOf(Language.RU to "ПУБЛИЧНЫЙ IP-АДРЕС", Language.EN to "PUBLIC IP ADDRESS"),
+        "dashboard_ip_checking" to mapOf(Language.RU to "Проверка IP...", Language.EN to "Checking IP..."),
+        "dashboard_ip_unknown" to mapOf(Language.RU to "Нажмите для проверки IP", Language.EN to "Tap refresh to check IP"),
         "shield_active" to mapOf(Language.RU to "ЗАЩИТА АКТИВНА", Language.EN to "SHIELD ACTIVE"),
         "checking_ip" to mapOf(Language.RU to "Проверка IP...", Language.EN to "Checking IP..."),
         "ping_na" to mapOf(Language.RU to "Пинг: Н/Д (Выбрать сервер)", Language.EN to "Ping: N/A (Select Server)"),
@@ -191,6 +194,13 @@ object LanguageManager {
         "core_status_downloading" to mapOf(Language.RU to "Загрузка официального ядра Xray...", Language.EN to "Downloading official Xray core..."),
         "core_status_updating" to mapOf(Language.RU to "Обновление ядра Xray...", Language.EN to "Updating Xray core..."),
         "core_status_updating_dbs" to mapOf(Language.RU to "Обновление баз GeoIP/GeoSite...", Language.EN to "Updating GeoIP/GeoSite databases..."),
+        "core_allow_prerelease" to mapOf(Language.RU to "Включать pre-release версии Xray", Language.EN to "Include Xray pre-release versions"),
+        "core_allow_prerelease_desc" to mapOf(Language.RU to "Позволяет проверять и устанавливать тестовые предварительные сборки ядра Xray-core из GitHub", Language.EN to "Allows checking for and installing pre-release test builds of Xray-core from GitHub"),
+        "core_select_version" to mapOf(Language.RU to "ВЫБРАТЬ ДРУГУЮ ВЕРСИЮ", Language.EN to "SELECT SPECIFIC VERSION"),
+        "core_select_version_title" to mapOf(Language.RU to "ДОСТУПНЫЕ ВЕРСИИ XRAY-CORE", Language.EN to "AVAILABLE XRAY-CORE VERSIONS"),
+        "core_prerelease_badge" to mapOf(Language.RU to "PRE-RELEASE", Language.EN to "PRE-RELEASE"),
+        "core_release_badge" to mapOf(Language.RU to "RELEASE", Language.EN to "RELEASE"),
+        "core_install_version" to mapOf(Language.RU to "УСТАНОВИТЬ ВЕРСИЮ", Language.EN to "INSTALL VERSION"),
         
         // VPN Service Notifications
         "notification_channel_name" to mapOf(Language.RU to "Служба подключения Sentinel", Language.EN to "Sentinel Connection Service"),

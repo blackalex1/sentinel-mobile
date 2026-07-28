@@ -9,8 +9,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -33,7 +31,7 @@ fun LanSharingProxyUrlsBox(
 ) {
     if (!isVpnActive || activeTetherIps.isEmpty() || (!isHttpEnabled && !isSocksEnabled)) return
 
-    val clipboardManager = LocalClipboardManager.current
+    val sysClipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
     val firstIp = activeTetherIps.firstOrNull() ?: "192.168.43.1"
     
     val socksProxyUrl = if (isAuthEnabled) {
@@ -108,7 +106,7 @@ fun LanSharingProxyUrlsBox(
                                 fontWeight = FontWeight.Bold,
                                 color = CyberTeal,
                                 modifier = Modifier.clickable {
-                                    clipboardManager.setText(AnnotatedString(socksProxyUrl))
+                                    sysClipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Proxy URL", socksProxyUrl))
                                     Toast.makeText(
                                         context,
                                         if (com.xprox.sentinel.data.LanguageManager.currentLanguage.value.code == "ru") "SOCKS5 ссылка скопирована!" else "SOCKS5 URL copied!",
@@ -128,7 +126,7 @@ fun LanSharingProxyUrlsBox(
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         modifier = Modifier.clickable {
-                            clipboardManager.setText(AnnotatedString(socksProxyUrl))
+                            sysClipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Proxy URL", socksProxyUrl))
                             Toast.makeText(
                                 context,
                                 if (com.xprox.sentinel.data.LanguageManager.currentLanguage.value.code == "ru") "SOCKS5 ссылка скопирована!" else "SOCKS5 URL copied!",
@@ -203,7 +201,7 @@ fun LanSharingProxyUrlsBox(
                                 fontWeight = FontWeight.Bold,
                                 color = CyberTeal,
                                 modifier = Modifier.clickable {
-                                    clipboardManager.setText(AnnotatedString(httpProxyUrl))
+                                    sysClipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Proxy URL", httpProxyUrl))
                                     Toast.makeText(
                                         context,
                                         if (com.xprox.sentinel.data.LanguageManager.currentLanguage.value.code == "ru") "HTTP ссылка скопирована!" else "HTTP URL copied!",
@@ -223,7 +221,7 @@ fun LanSharingProxyUrlsBox(
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         modifier = Modifier.clickable {
-                            clipboardManager.setText(AnnotatedString(httpProxyUrl))
+                            sysClipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Proxy URL", httpProxyUrl))
                             Toast.makeText(
                                 context,
                                 if (com.xprox.sentinel.data.LanguageManager.currentLanguage.value.code == "ru") "HTTP ссылка скопирована!" else "HTTP URL copied!",

@@ -11,15 +11,38 @@ import java.util.zip.ZipInputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+data class XrayReleaseInfo(
+    val tagName: String,
+    val isPrerelease: Boolean,
+    val publishedAt: String = ""
+)
+
 object XrayCoreDownloader {
     private const val TAG = "XrayCoreDownloader"
     private const val BINARY_NAME = "xray"
     
     private const val PREFS_NAME = "xprox_prefs"
     private const val KEY_INSTALLED_VERSION = "xray_installed_version"
+    private const val KEY_ALLOW_PRERELEASE = "xray_allow_prerelease"
     
     // Fallback baseline constant if API requests fail or internet is offline
     const val FALLBACK_XRAY_VERSION = "v26.3.27"
+
+    /**
+     * Retrieves whether pre-release versions are allowed.
+     */
+    fun getAllowPrerelease(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(KEY_ALLOW_PRERELEASE, false)
+    }
+
+    /**
+     * Persists whether pre-release versions are allowed.
+     */
+    fun setAllowPrerelease(context: Context, allow: Boolean) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(KEY_ALLOW_PRERELEASE, allow).apply()
+    }
 
     /**
      * Retrieves the installed Xray core version from SharedPreferences.
@@ -50,7 +73,11 @@ object XrayCoreDownloader {
      * Detects device CPU architecture and returns the corresponding official GitHub download URL.
      */
     fun getDownloadUrl(version: String = FALLBACK_XRAY_VERSION): String {
-        val abi = Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a"
+        val abi = try {
+            Build.SUPPORTED_ABIS?.firstOrNull()
+        } catch (e: Throwable) {
+            null
+        } ?: "arm64-v8a"
         Log.d(TAG, "Detected CPU ABI: $abi")
         
         val arch = when {
@@ -66,31 +93,17 @@ object XrayCoreDownloader {
     }
 
     /**
-     * Fetches the latest stable Xray-core version tag from GitHub Releases.
+     * Fetches all available Xray-core release versions from GitHub API.
      */
-    suspend fun fetchLatestVersion(): String? = withContext(Dispatchers.IO) {
-        try {
-            val url = URL("https://api.github.com/repos/XTLS/Xray-core/releases/latest")
-            val connection = url.openConnection() as java.net.HttpURLConnection
-            connection.requestMethod = "GET"
-            connection.connectTimeout = 8000
-            connection.readTimeout = 8000
-            connection.setRequestProperty("Accept", "application/json")
-            connection.setRequestProperty("User-Agent", "sentinel-android-app")
+    suspend fun fetchAvailableReleases(allowPrerelease: Boolean = false): List<XrayReleaseInfo> = withContext(Dispatchers.IO) {
+        com.xprox.sentinel.service.downloader.XrayGithubApiClient.fetchAvailableReleases(allowPrerelease)
+    }
 
-            val responseCode = connection.responseCode
-            Log.d(TAG, "GitHub API returned response code: $responseCode")
-            if (responseCode == 200) {
-                val response = connection.inputStream.bufferedReader().use { it.readText() }
-                val json = org.json.JSONObject(response)
-                val tagName = json.getString("tag_name")
-                Log.i(TAG, "Latest Xray-core release tag from GitHub: $tagName")
-                return@withContext tagName
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to fetch latest version from GitHub API", e)
-        }
-        return@withContext null
+    /**
+     * Fetches the latest Xray-core version tag from GitHub Releases.
+     */
+    suspend fun fetchLatestVersion(allowPrerelease: Boolean = false): String? = withContext(Dispatchers.IO) {
+        com.xprox.sentinel.service.downloader.XrayGithubApiClient.fetchLatestVersionTag(allowPrerelease)
     }
 
     /**

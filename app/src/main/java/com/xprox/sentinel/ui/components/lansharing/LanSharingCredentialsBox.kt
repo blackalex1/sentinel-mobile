@@ -9,8 +9,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -30,7 +28,7 @@ fun LanSharingCredentialsBox(
     if (!isAuthEnabled) return
 
     var isPasswordVisible by remember { mutableStateOf(false) }
-    val clipboardManager = LocalClipboardManager.current
+    val sysClipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
 
     Card(
         colors = CardDefaults.cardColors(containerColor = DarkBg),
@@ -86,7 +84,7 @@ fun LanSharingCredentialsBox(
                             fontWeight = FontWeight.Bold,
                             color = CyberTeal,
                             modifier = Modifier.clickable {
-                                clipboardManager.setText(AnnotatedString(displayUsername))
+                                sysClipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Username", displayUsername))
                                 Toast.makeText(context, if (com.xprox.sentinel.data.LanguageManager.currentLanguage.value.code == "ru") "Логин скопирован" else "Username copied", Toast.LENGTH_SHORT).show()
                             }
                         )
@@ -99,7 +97,7 @@ fun LanSharingCredentialsBox(
                         fontWeight = FontWeight.Bold,
                         color = TextWhite,
                         modifier = Modifier.clickable {
-                            clipboardManager.setText(AnnotatedString(displayUsername))
+                            sysClipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Username", displayUsername))
                             Toast.makeText(context, if (com.xprox.sentinel.data.LanguageManager.currentLanguage.value.code == "ru") "Логин скопирован" else "Username copied", Toast.LENGTH_SHORT).show()
                         }
                     )
@@ -138,7 +136,7 @@ fun LanSharingCredentialsBox(
                                 fontWeight = FontWeight.Bold,
                                 color = CyberTeal,
                                 modifier = Modifier.clickable {
-                                    clipboardManager.setText(AnnotatedString(displayPassword))
+                                    sysClipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Password", displayPassword))
                                     Toast.makeText(context, if (com.xprox.sentinel.data.LanguageManager.currentLanguage.value.code == "ru") "Пароль скопирован" else "Password copied", Toast.LENGTH_SHORT).show()
                                 }
                             )
