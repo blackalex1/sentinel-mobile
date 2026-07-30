@@ -21,6 +21,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -85,42 +86,61 @@ fun DashboardRadarButton(
 
     val infiniteTransition = rememberInfiniteTransition(label = "radar")
     
-    val pulseRadius by infiniteTransition.animateFloat(
-        initialValue = 0.1f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "radius"
-    )
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.6f,
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "alpha"
-    )
-    val glowBreathe by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.7f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1800, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "glowBreathe"
-    )
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(if (isRunning) 4000 else 12000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation"
-    )
+    val pulseRadius by if (isRunning) {
+        infiniteTransition.animateFloat(
+            initialValue = 0.1f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(2400, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "radius"
+        )
+    } else {
+        remember { mutableStateOf(0f) }
+    }
+
+    val pulseAlpha by if (isRunning) {
+        infiniteTransition.animateFloat(
+            initialValue = 0.6f,
+            targetValue = 0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(2400, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "alpha"
+        )
+    } else {
+        remember { mutableStateOf(0f) }
+    }
+
+    val glowBreathe by if (isRunning) {
+        infiniteTransition.animateFloat(
+            initialValue = 0.3f,
+            targetValue = 0.7f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1800, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "glowBreathe"
+        )
+    } else {
+        remember { mutableStateOf(0.3f) }
+    }
+
+    val rotation by if (isRunning) {
+        infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(4000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "rotation"
+        )
+    } else {
+        remember { mutableStateOf(0f) }
+    }
 
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()

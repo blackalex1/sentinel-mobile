@@ -271,7 +271,10 @@ object LanguageManager {
         "analytics_collection_approved" to mapOf(Language.RU to "Аудит и сбор данных подтверждены пользователем", Language.EN to "Data audit and collection approved by user"),
         "disconnect_confirm_title" to mapOf(Language.RU to "Внимание: идет сбор данных", Language.EN to "Warning: Data Capture Active"),
         "disconnect_confirm_desc" to mapOf(Language.RU to "В данный момент выполняется сбор сетевого трафика (PCAP) для анализа угроз. Отключение VPN прервет этот процесс. Вы действительно хотите отключить VPN?", Language.EN to "A network packet capture (PCAP) is currently active for threat detection. Disconnecting the VPN will stop the capture. Are you sure you want to disconnect?"),
-        "btn_confirm_disconnect" to mapOf(Language.RU to "Отключить", Language.EN to "Disconnect")
+        "btn_confirm_disconnect" to mapOf(Language.RU to "Отключить", Language.EN to "Disconnect"),
+        "app_author_label" to mapOf(Language.RU to "АВТОР И РАЗРАБОТЧИК", Language.EN to "DEVELOPER & AUTHOR"),
+        "app_author_by" to mapOf(Language.RU to "by", Language.EN to "by"),
+        "app_author_github_hint" to mapOf(Language.RU to "Нажмите, чтобы открыть профиль GitHub", Language.EN to "Tap to open GitHub profile")
     )
 }
 
