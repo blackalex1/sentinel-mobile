@@ -42,6 +42,7 @@ object InboundConfigBuilder {
             append("              \"settings\": {\n")
             append("                \"name\": \"tun0\",\n")
             append("                \"mtu\": 1500,\n")
+            append("                \"stack\": \"gvisor\",\n")
             append("                \"gateway\": [\"10.0.0.1/24\", \"fd00::1/64\"]\n")
             append("              },\n")
             append("              \"sniffing\": {\n")

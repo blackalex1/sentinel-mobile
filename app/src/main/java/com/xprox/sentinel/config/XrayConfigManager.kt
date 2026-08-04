@@ -323,6 +323,11 @@ $blockedUidsRuleJson
                 "type": "field",
                 "domain": ${geositeRules.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
                 "outboundTag": "proxy"
+              },
+              {
+                "type": "field",
+                "network": "tcp,udp",
+                "outboundTag": "proxy"
               }
             ]
           }
