@@ -519,4 +519,76 @@ object XrayProfilePersistence {
         val prefs = getEncryptedPrefs(context)
         return prefs.getBoolean(KEY_KILL_SWITCH, false)
     }
+
+    private const val KEY_BYPASS_RU_SITES = "xprox_bypass_ru_sites"
+    private const val KEY_BYPASS_TORRENTS = "xprox_bypass_torrents"
+    private const val KEY_BLOCK_QUIC = "xprox_block_quic"
+    private const val KEY_BYPASS_LAN = "xprox_bypass_lan"
+    private const val KEY_CUSTOM_DIRECT_RULES = "xprox_custom_direct_rules"
+    private const val KEY_CUSTOM_PROXY_RULES = "xprox_custom_proxy_rules"
+    private const val KEY_CUSTOM_BLOCK_RULES = "xprox_custom_block_rules"
+
+    fun saveBypassRuSites(context: Context, enabled: Boolean) {
+        getEncryptedPrefs(context).edit().putBoolean(KEY_BYPASS_RU_SITES, enabled).apply()
+        _updatesFlow.tryEmit(Unit)
+    }
+
+    fun loadBypassRuSites(context: Context): Boolean {
+        return getEncryptedPrefs(context).getBoolean(KEY_BYPASS_RU_SITES, true)
+    }
+
+    fun saveBypassTorrents(context: Context, enabled: Boolean) {
+        getEncryptedPrefs(context).edit().putBoolean(KEY_BYPASS_TORRENTS, enabled).apply()
+        _updatesFlow.tryEmit(Unit)
+    }
+
+    fun loadBypassTorrents(context: Context): Boolean {
+        return getEncryptedPrefs(context).getBoolean(KEY_BYPASS_TORRENTS, true)
+    }
+
+    fun saveBlockQuic(context: Context, enabled: Boolean) {
+        getEncryptedPrefs(context).edit().putBoolean(KEY_BLOCK_QUIC, enabled).apply()
+        _updatesFlow.tryEmit(Unit)
+    }
+
+    fun loadBlockQuic(context: Context): Boolean {
+        return getEncryptedPrefs(context).getBoolean(KEY_BLOCK_QUIC, true)
+    }
+
+    fun saveBypassLan(context: Context, enabled: Boolean) {
+        getEncryptedPrefs(context).edit().putBoolean(KEY_BYPASS_LAN, enabled).apply()
+        _updatesFlow.tryEmit(Unit)
+    }
+
+    fun loadBypassLan(context: Context): Boolean {
+        return getEncryptedPrefs(context).getBoolean(KEY_BYPASS_LAN, true)
+    }
+
+    fun saveCustomDirectRules(context: Context, rules: List<String>) {
+        saveStringList(context, KEY_CUSTOM_DIRECT_RULES, rules)
+        _updatesFlow.tryEmit(Unit)
+    }
+
+    fun loadCustomDirectRules(context: Context): List<String> {
+        return loadStringList(context, KEY_CUSTOM_DIRECT_RULES, emptyList())
+    }
+
+    fun saveCustomProxyRules(context: Context, rules: List<String>) {
+        saveStringList(context, KEY_CUSTOM_PROXY_RULES, rules)
+        _updatesFlow.tryEmit(Unit)
+    }
+
+    fun loadCustomProxyRules(context: Context): List<String> {
+        return loadStringList(context, KEY_CUSTOM_PROXY_RULES, emptyList())
+    }
+
+    fun saveCustomBlockRules(context: Context, rules: List<String>) {
+        saveStringList(context, KEY_CUSTOM_BLOCK_RULES, rules)
+        _updatesFlow.tryEmit(Unit)
+    }
+
+    fun loadCustomBlockRules(context: Context): List<String> {
+        return loadStringList(context, KEY_CUSTOM_BLOCK_RULES, emptyList())
+    }
 }
+

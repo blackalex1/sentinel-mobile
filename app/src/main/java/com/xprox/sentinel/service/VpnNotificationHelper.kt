@@ -81,6 +81,7 @@ object VpnNotificationHelper {
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setSilent(true)
 
         val notificationTitle = if (profileName.isNotEmpty() && profileAddress.isNotEmpty()) {
             profileName

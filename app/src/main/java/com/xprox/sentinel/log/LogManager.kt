@@ -27,7 +27,7 @@ object LogManager {
     private const val PREFS_NAME = "x_prox_sensitive_ports_prefs"
     private const val KEY_ACTIVE_PORTS = "active_sensitive_ports"
 
-    private val DEFAULT_ACTIVE_PORTS = setOf(21, 22, 23, 25, 53, 80, 110, 143, 443, 445, 3389, 3306, 6379, 27017)
+    private val DEFAULT_ACTIVE_PORTS = setOf(21, 22, 23, 25, 110, 143, 445, 3389, 3306, 6379, 27017)
     private var activePortsSet: Set<Int> = emptySet()
 
     private const val KEY_CUSTOM_PORTS = "custom_sensitive_ports"

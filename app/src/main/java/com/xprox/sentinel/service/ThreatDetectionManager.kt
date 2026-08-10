@@ -194,8 +194,15 @@ object ThreatDetectionManager {
 
         // 1. If already blackholed, write to isolated log, write to pcap if in window, and drop immediately (FOR ALL PORTS!)
         if (isAppBlocked(packageName)) {
-            blockedDestinations.add(destinationIp)
-            blockedPorts.add(port)
+            val isStandardDnsOrWeb = port == 53 || port == 80 || port == 443 || port == 853 ||
+                destinationIp == "8.8.8.8" || destinationIp == "8.8.4.4" ||
+                destinationIp == "1.1.1.1" || destinationIp == "1.0.0.1" ||
+                destinationIp.startsWith("2001:4860:") || destinationIp.startsWith("2606:4700:") ||
+                destinationIp == "127.0.0.1" || destinationIp == "localhost"
+            if (!isStandardDnsOrWeb) {
+                blockedDestinations.add(destinationIp)
+                blockedPorts.add(port)
+            }
             
             val logKey = "$packageName:$destinationIp:$port"
             val lastTime = lastLogTimes[logKey] ?: 0L
@@ -245,7 +252,8 @@ object ThreatDetectionManager {
             )
 
             // 4. Check Threat Threshold
-            if (attempts.size > THRESHOLD) {
+            val isStandardWebPort = port == 80 || port == 443 || port == 53
+            if (attempts.size > THRESHOLD && !isStandardWebPort) {
                 // Determine if this is a critical system/kernel package
                 val isSystemPackage = packageName == "android.system.kernel" || 
                                      packageName.startsWith("android.system.") || 
@@ -296,8 +304,15 @@ object ThreatDetectionManager {
 
                     // Trigger instant blackhole
                     blockedApps.add(packageName)
-                    blockedDestinations.add(destinationIp)
-                    blockedPorts.add(port)
+                    val isStandardDnsOrWeb = port == 53 || port == 80 || port == 443 || port == 853 ||
+                        destinationIp == "8.8.8.8" || destinationIp == "8.8.4.4" ||
+                        destinationIp == "1.1.1.1" || destinationIp == "1.0.0.1" ||
+                        destinationIp.startsWith("2001:4860:") || destinationIp.startsWith("2606:4700:") ||
+                        destinationIp == "127.0.0.1" || destinationIp == "localhost"
+                    if (!isStandardDnsOrWeb) {
+                        blockedDestinations.add(destinationIp)
+                        blockedPorts.add(port)
+                    }
                     XrayProfilePersistence.saveBlockedApps(context, blockedApps)
                     _blockedAppsFlow.value = blockedApps.toList()
 

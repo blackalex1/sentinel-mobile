@@ -429,19 +429,23 @@ class VpnManagerService : VpnService() {
             // 5. Start background speed monitor loop
             speedMonitorJob?.cancel()
             var lastShowSpeed = XrayProfilePersistence.loadShowSpeedInNotification(this)
+            var lastSpeedText: String? = null
             speedMonitorJob = VpnSpeedMonitor.start(serviceScope, _isRunningFlow) { speedText ->
                 _speedFlow.value = speedText
                 val showSpeed = XrayProfilePersistence.loadShowSpeedInNotification(this)
                 val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 if (showSpeed) {
-                    val notif = VpnNotificationHelper.createNotification(
-                        context = this,
-                        profileName = selectedProfile.name,
-                        profileAddress = selectedProfile.address,
-                        socksPort = _activePortFlow.value,
-                        speedText = speedText
-                    )
-                    manager.notify(VpnNotificationHelper.NOTIFICATION_ID, notif)
+                    if (speedText != lastSpeedText || !lastShowSpeed) {
+                        val notif = VpnNotificationHelper.createNotification(
+                            context = this,
+                            profileName = selectedProfile.name,
+                            profileAddress = selectedProfile.address,
+                            socksPort = _activePortFlow.value,
+                            speedText = speedText
+                        )
+                        manager.notify(VpnNotificationHelper.NOTIFICATION_ID, notif)
+                        lastSpeedText = speedText
+                    }
                 } else if (lastShowSpeed) {
                     // Reset once to standard static notification when toggled off
                     val notif = VpnNotificationHelper.createNotification(
@@ -452,6 +456,7 @@ class VpnManagerService : VpnService() {
                         speedText = ""
                     )
                     manager.notify(VpnNotificationHelper.NOTIFICATION_ID, notif)
+                    lastSpeedText = null
                 }
                 lastShowSpeed = showSpeed
             }

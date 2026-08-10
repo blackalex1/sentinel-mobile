@@ -9,13 +9,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -25,19 +27,22 @@ import com.xprox.sentinel.theme.*
 @Composable
 fun NetworkRoutingPanel(
     context: Context,
+    customDirectRules: List<String>,
+    customProxyRules: List<String>,
+    customBlockRules: List<String>,
     geoIpRules: Set<String>,
     geoSiteRules: Set<String>,
-    customGeoIpInput: String,
-    customGeoSiteInput: String,
-    onCustomGeoIpInputChange: (String) -> Unit,
-    onCustomGeoSiteInputChange: (String) -> Unit,
+    onAddCustomRule: (target: String, rule: String) -> Unit,
+    onRemoveCustomRule: (target: String, rule: String) -> Unit,
     onGeoIpRuleToggle: (preset: String, isChecked: Boolean) -> Unit,
     onGeoSiteRuleToggle: (preset: String, isChecked: Boolean) -> Unit,
-    onCustomGeoIpAdd: () -> Unit,
-    onCustomGeoSiteAdd: () -> Unit,
-    onGeoIpRuleRemove: (customRule: String) -> Unit,
-    onGeoSiteRuleRemove: (customRule: String) -> Unit
+    onGeoIpRuleRemove: (rule: String) -> Unit,
+    onGeoSiteRuleRemove: (rule: String) -> Unit
 ) {
+    var selectedTarget by remember { mutableStateOf("Direct") } // Direct, Proxy, Block
+    var customInputText by remember { mutableStateOf("") }
+    var customGeoTagInput by remember { mutableStateOf("") }
+
     val geoIpPresets = listOf("geoip:private", "geoip:ru", "geoip:cn", "geoip:us")
     val geoSitePresets = listOf(
         "geosite:google",
@@ -49,289 +54,311 @@ fun NetworkRoutingPanel(
         "geosite:twitter"
     )
 
-    @Composable
-    fun getGeoIpPresetLabel(preset: String): String {
-        return when (preset) {
-            "geoip:private" -> string("preset_local_ips")
-            "geoip:ru" -> string("preset_ru_ips")
-            "geoip:cn" -> string("preset_cn_ips")
-            "geoip:us" -> string("preset_us_ips")
-            else -> preset
-        }
-    }
-
-    @Composable
-    fun getGeoSitePresetLabel(preset: String): String {
-        return when (preset) {
-            "geosite:google" -> string("preset_google")
-            "geosite:category-ads-all" -> string("preset_ads")
-            "geosite:youtube" -> string("preset_youtube")
-            "geosite:netflix" -> string("preset_netflix")
-            "geosite:instagram" -> string("preset_instagram")
-            "geosite:facebook" -> string("preset_facebook")
-            "geosite:twitter" -> string("preset_twitter")
-            else -> preset
-        }
-    }
-
-    Card(
-        colors = CardDefaults.cardColors(containerColor = DarkCard),
+    LazyColumn(
         modifier = Modifier
-            .fillMaxWidth()
-            .fillMaxHeight()
-            .clip(RoundedCornerShape(20.dp)),
-        border = BorderStroke(
-            width = 1.dp,
-            brush = Brush.horizontalGradient(
-                listOf(CyberTeal.copy(alpha = 0.35f), CyberBlue.copy(alpha = 0.05f))
-            )
-        )
+            .fillMaxSize()
+            .padding(top = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = DarkBg),
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(4.dp)
-                .clip(RoundedCornerShape(16.dp)),
-            border = BorderStroke(0.5.dp, CardBorder)
-        ) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-        // Section 1: GeoIP Routing rules
+        // Section 1: Add Custom Domain/IP Rule
         item {
-            Text(
-                text = string("geoip_section_title"),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = CyberTeal,
-                letterSpacing = 1.sp
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-
-        // Preset rules list
-        items(geoIpPresets) { preset ->
-            val isChecked = geoIpRules.contains(preset)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        onGeoIpRuleToggle(preset, !isChecked)
-                    }
-                    .padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Surface(
+                color = DarkCard,
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, Brush.horizontalGradient(listOf(CyberTeal.copy(alpha = 0.35f), CyberPurple.copy(alpha = 0.05f)))),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(text = getGeoIpPresetLabel(preset), color = TextWhite, fontSize = 13.sp)
-                Switch(
-                    checked = isChecked,
-                    onCheckedChange = { checked ->
-                        onGeoIpRuleToggle(preset, checked)
-                    },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = CyberTeal,
-                        checkedTrackColor = CyberTeal.copy(alpha = 0.5f),
-                        uncheckedThumbColor = TextGray,
-                        uncheckedTrackColor = CardBorder
-                    )
-                )
+                Surface(
+                    color = DarkBg,
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(0.5.dp, CardBorder),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(4.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "ПОЛЬЗОВАТЕЛЬСКИЕ ПРАВИЛА (DOMAINS / IPS)",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = CyberTeal,
+                            letterSpacing = 1.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Target Action Segmented Selector (Direct / Proxy / Block)
+                        Surface(
+                            color = DarkCard,
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(0.5.dp, CardBorder),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(38.dp)
+                        ) {
+                            Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                                listOf(
+                                    "Direct" to string("custom_target_direct"),
+                                    "Proxy" to string("custom_target_proxy"),
+                                    "Block" to string("custom_target_block")
+                                ).forEach { (targetKey, targetLabel) ->
+                                    val isSelected = selectedTarget == targetKey
+                                    val targetColor = when (targetKey) {
+                                        "Direct" -> CyberTeal
+                                        "Proxy" -> CyberBlue
+                                        else -> WarningRed
+                                    }
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                            .padding(2.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(if (isSelected) targetColor else Color.Transparent)
+                                            .clickable { selectedTarget = targetKey }
+                                    ) {
+                                        Text(
+                                            text = targetLabel,
+                                            color = if (isSelected) DarkBg else TextWhite,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Input field + Add button
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = customInputText,
+                                onValueChange = { customInputText = it },
+                                placeholder = { Text(text = string("add_custom_domain_or_ip"), color = TextGray, fontSize = 12.sp) },
+                                singleLine = true,
+                                textStyle = LocalTextStyle.current.copy(fontSize = 12.sp, color = TextWhite),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = TextWhite,
+                                    unfocusedTextColor = TextWhite,
+                                    focusedBorderColor = CyberTeal,
+                                    unfocusedBorderColor = CardBorder,
+                                    focusedContainerColor = DarkCard,
+                                    unfocusedContainerColor = DarkCard,
+                                    cursorColor = CyberTeal
+                                ),
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp)
+                            )
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            Button(
+                                onClick = {
+                                    if (customInputText.isNotBlank()) {
+                                        onAddCustomRule(selectedTarget, customInputText.trim())
+                                        customInputText = ""
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = CyberTeal),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.height(52.dp)
+                            ) {
+                                Icon(imageVector = Icons.Default.Add, contentDescription = "Add", tint = DarkBg)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Active Custom Rules Lists
+                        CustomRuleGroupList(
+                            title = "Напрямую (Direct)",
+                            rules = customDirectRules,
+                            badgeColor = CyberTeal,
+                            onRemove = { rule -> onRemoveCustomRule("Direct", rule) }
+                        )
+
+                        CustomRuleGroupList(
+                            title = "Через VPN (Proxy)",
+                            rules = customProxyRules,
+                            badgeColor = CyberBlue,
+                            onRemove = { rule -> onRemoveCustomRule("Proxy", rule) }
+                        )
+
+                        CustomRuleGroupList(
+                            title = "Заблокировано (Block)",
+                            rules = customBlockRules,
+                            badgeColor = WarningRed,
+                            onRemove = { rule -> onRemoveCustomRule("Block", rule) }
+                        )
+
+                    }
+                }
             }
-            HorizontalDivider(color = CardBorder, thickness = 0.5.dp)
         }
 
-        // Custom GeoIP Rules Chips
-        val customGeoIpRules = geoIpRules.filter { !geoIpPresets.contains(it) }
-        if (customGeoIpRules.isNotEmpty()) {
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    customGeoIpRules.forEach { customRule ->
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = DarkBg),
-                            border = BorderStroke(1.dp, CardBorder),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
+        // Section 2: GeoIP Presets & Tags
+        item {
+            Surface(
+                color = DarkCard,
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, CardBorder),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Surface(
+                    color = DarkBg,
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(0.5.dp, CardBorder),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(4.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = string("geoip_section_title"),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = CyberTeal,
+                            letterSpacing = 1.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        geoIpPresets.forEach { preset ->
+                            val isChecked = geoIpRules.contains(preset)
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                    .clickable { onGeoIpRuleToggle(preset, !isChecked) }
+                                    .padding(vertical = 8.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(text = customRule, color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                                IconButton(
-                                    onClick = {
-                                        onGeoIpRuleRemove(customRule)
-                                    },
-                                    modifier = Modifier.size(24.dp)
-                                ) {
-                                    Icon(imageVector = Icons.Default.Clear, contentDescription = "Remove", tint = WarningRed, modifier = Modifier.size(16.dp))
-                                }
+                                Text(text = preset, color = TextWhite, fontSize = 12.sp)
+                                Switch(
+                                    checked = isChecked,
+                                    onCheckedChange = { checked -> onGeoIpRuleToggle(preset, checked) },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = CyberTeal,
+                                        checkedTrackColor = CyberTeal.copy(alpha = 0.5f),
+                                        uncheckedThumbColor = TextGray,
+                                        uncheckedTrackColor = CardBorder
+                                    )
+                                )
                             }
+                            HorizontalDivider(color = CardBorder, thickness = 0.5.dp)
                         }
                     }
                 }
             }
         }
 
-        // Add Custom GeoIP rule
+        // Section 3: GeoSite Presets & Tags
         item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(IntrinsicSize.Min),
-                verticalAlignment = Alignment.CenterVertically
+            Surface(
+                color = DarkCard,
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, CardBorder),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                OutlinedTextField(
-                    value = customGeoIpInput,
-                    onValueChange = onCustomGeoIpInputChange,
-                    placeholder = { Text(text = string("add_custom_rule"), color = TextGray, fontSize = 14.sp) },
-                    singleLine = true,
-                    textStyle = LocalTextStyle.current.copy(fontSize = 14.sp, color = TextWhite),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = TextWhite,
-                        unfocusedTextColor = TextWhite,
-                        focusedBorderColor = CyberTeal,
-                        unfocusedBorderColor = CardBorder,
-                        focusedContainerColor = DarkBg,
-                        unfocusedContainerColor = DarkBg,
-                        cursorColor = CyberTeal
-                    ),
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(8.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Button(
-                    onClick = onCustomGeoIpAdd,
-                    colors = ButtonDefaults.buttonColors(containerColor = CyberTeal),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxHeight()
+                Surface(
+                    color = DarkBg,
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(0.5.dp, CardBorder),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(4.dp)
                 ) {
-                    Text(text = string("btn_add"), color = DarkBg, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-        }
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = string("geosite_section_title"),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = CyberTeal,
+                            letterSpacing = 1.sp
+                        )
 
-        // Section 2: GeoSite Routing rules
-        item {
-            HorizontalDivider(color = CardBorder, thickness = 1.dp)
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = string("geosite_section_title"),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = CyberTeal,
-                letterSpacing = 1.sp
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-        }
+                        Spacer(modifier = Modifier.height(8.dp))
 
-        // Preset geosite rules list
-        items(geoSitePresets) { preset ->
-            val isChecked = geoSiteRules.contains(preset)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        onGeoSiteRuleToggle(preset, !isChecked)
-                    }
-                    .padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(text = getGeoSitePresetLabel(preset), color = TextWhite, fontSize = 13.sp)
-                Switch(
-                    checked = isChecked,
-                    onCheckedChange = { checked ->
-                        onGeoSiteRuleToggle(preset, checked)
-                    },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = CyberTeal,
-                        checkedTrackColor = CyberTeal.copy(alpha = 0.5f),
-                        uncheckedThumbColor = TextGray,
-                        uncheckedTrackColor = CardBorder
-                    )
-                )
-            }
-            HorizontalDivider(color = CardBorder, thickness = 0.5.dp)
-        }
-
-        // Custom GeoSite Rules Chips
-        val customGeoSiteRules = geoSiteRules.filter { !geoSitePresets.contains(it) }
-        if (customGeoSiteRules.isNotEmpty()) {
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    customGeoSiteRules.forEach { customRule ->
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = DarkBg),
-                            border = BorderStroke(1.dp, CardBorder),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
+                        geoSitePresets.forEach { preset ->
+                            val isChecked = geoSiteRules.contains(preset)
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                    .clickable { onGeoSiteRuleToggle(preset, !isChecked) }
+                                    .padding(vertical = 8.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(text = customRule, color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                                IconButton(
-                                    onClick = {
-                                        onGeoSiteRuleRemove(customRule)
-                                    },
-                                    modifier = Modifier.size(24.dp)
-                                ) {
-                                    Icon(imageVector = Icons.Default.Clear, contentDescription = "Remove", tint = WarningRed, modifier = Modifier.size(16.dp))
-                                }
+                                Text(text = preset, color = TextWhite, fontSize = 12.sp)
+                                Switch(
+                                    checked = isChecked,
+                                    onCheckedChange = { checked -> onGeoSiteRuleToggle(preset, checked) },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = CyberTeal,
+                                        checkedTrackColor = CyberTeal.copy(alpha = 0.5f),
+                                        uncheckedThumbColor = TextGray,
+                                        uncheckedTrackColor = CardBorder
+                                    )
+                                )
                             }
+                            HorizontalDivider(color = CardBorder, thickness = 0.5.dp)
                         }
                     }
-                }
-            }
-        }
-
-        // Add Custom GeoSite rule
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(IntrinsicSize.Min),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedTextField(
-                    value = customGeoSiteInput,
-                    onValueChange = onCustomGeoSiteInputChange,
-                    placeholder = { Text(text = string("add_custom_rule"), color = TextGray, fontSize = 14.sp) },
-                    singleLine = true,
-                    textStyle = LocalTextStyle.current.copy(fontSize = 14.sp, color = TextWhite),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = TextWhite,
-                        unfocusedTextColor = TextWhite,
-                        focusedBorderColor = CyberTeal,
-                        unfocusedBorderColor = CardBorder,
-                        focusedContainerColor = DarkBg,
-                        unfocusedContainerColor = DarkBg,
-                        cursorColor = CyberTeal
-                    ),
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(8.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Button(
-                    onClick = onCustomGeoSiteAdd,
-                    colors = ButtonDefaults.buttonColors(containerColor = CyberTeal),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxHeight()
-                ) {
-                    Text(text = string("btn_add"), color = DarkBg, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                 }
             }
         }
     }
 }
-}
+
+@Composable
+private fun CustomRuleGroupList(
+    title: String,
+    rules: List<String>,
+    badgeColor: Color,
+    onRemove: (String) -> Unit
+) {
+    if (rules.isEmpty()) return
+
+    Column(modifier = Modifier.padding(bottom = 12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(badgeColor)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(text = title, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = TextGray)
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        rules.forEach { rule ->
+            Card(
+                colors = CardDefaults.cardColors(containerColor = DarkCard),
+                border = BorderStroke(0.5.dp, CardBorder),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(text = rule, color = TextWhite, fontSize = 12.sp)
+                    IconButton(onClick = { onRemove(rule) }, modifier = Modifier.size(24.dp)) {
+                        Icon(imageVector = Icons.Default.Clear, contentDescription = "Remove", tint = WarningRed, modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
+        }
+    }
 }

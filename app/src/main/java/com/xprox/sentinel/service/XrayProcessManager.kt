@@ -133,10 +133,10 @@ object XrayProcessManager {
                             val intent = Intent(context, VpnManagerService::class.java).apply {
                                 action = VpnManagerService.ACTION_RESTART_PROCESS
                             }
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                context.startForegroundService(intent)
-                            } else {
+                            try {
                                 context.startService(intent)
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Failed to send restart intent to VpnManagerService", e)
                             }
                         }
                     }

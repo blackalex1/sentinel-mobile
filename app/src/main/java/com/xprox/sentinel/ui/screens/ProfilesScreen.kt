@@ -1,27 +1,15 @@
 package com.xprox.sentinel.ui.screens
 
 import android.content.Context
-import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,11 +22,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.xprox.sentinel.config.XrayConfigManager
 import com.xprox.sentinel.config.XrayProfilePersistence
+import com.xprox.sentinel.data.string
 import com.xprox.sentinel.service.VpnManagerService
 import com.xprox.sentinel.theme.*
-import com.xprox.sentinel.data.string
 import com.xprox.sentinel.ui.screens.profiles.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -48,38 +35,46 @@ import kotlinx.coroutines.withContext
 fun ProfilesScreen() {
     val context = LocalContext.current
 
-    // Active sub-tab state (0 = Apps Routing, 1 = Network Routing)
+    // Active sub-tab state (0 = Smart Rules, 1 = Apps Routing, 2 = Custom Rules & Geo)
     var activeSubTab by remember { mutableStateOf(0) }
 
-    // App Split Tunneling variables
+    // Smart Preset Rules State
+    var bypassRu by remember { mutableStateOf(true) }
+    var bypassTorrents by remember { mutableStateOf(true) }
+    var blockQuic by remember { mutableStateOf(true) }
+    var bypassLan by remember { mutableStateOf(true) }
+
+    // App Split Tunneling State
     var installedApps by remember { mutableStateOf<List<AppInfo>>(emptyList()) }
     var allowedApps by remember { mutableStateOf(emptySet<String>()) }
     var searchQuery by remember { mutableStateOf("") }
     var isBypassMode by remember { mutableStateOf(true) }
 
-    // GeoIP & GeoSite Routing variables
+    // Custom Rules State (Direct, Proxy, Block)
+    var customDirectRules by remember { mutableStateOf(emptyList<String>()) }
+    var customProxyRules by remember { mutableStateOf(emptyList<String>()) }
+    var customBlockRules by remember { mutableStateOf(emptyList<String>()) }
+
+    // GeoIP & GeoSite Routing State
     var geoIpRules by remember { mutableStateOf(emptySet<String>()) }
     var geoSiteRules by remember { mutableStateOf(emptySet<String>()) }
-    var customGeoIpInput by remember { mutableStateOf("") }
-    var customGeoSiteInput by remember { mutableStateOf("") }
-
-    // Presets
-    val geoIpPresets = listOf("geoip:private", "geoip:ru", "geoip:cn", "geoip:us")
-    val geoSitePresets = listOf(
-        "geosite:google",
-        "geosite:category-ads-all",
-        "geosite:youtube",
-        "geosite:netflix",
-        "geosite:instagram",
-        "geosite:facebook",
-        "geosite:twitter"
-    )
 
     // Load persisted values at startup
     LaunchedEffect(Unit) {
         installedApps = getInstalledApps(context)
 
-        // Restore service static properties from disk
+        // Load Smart Rules
+        bypassRu = XrayProfilePersistence.loadBypassRuSites(context)
+        bypassTorrents = XrayProfilePersistence.loadBypassTorrents(context)
+        blockQuic = XrayProfilePersistence.loadBlockQuic(context)
+        bypassLan = XrayProfilePersistence.loadBypassLan(context)
+
+        // Load Custom Rules
+        customDirectRules = XrayProfilePersistence.loadCustomDirectRules(context)
+        customProxyRules = XrayProfilePersistence.loadCustomProxyRules(context)
+        customBlockRules = XrayProfilePersistence.loadCustomBlockRules(context)
+
+        // Restore app split tunneling static properties
         VpnManagerService.allowedAppsList = XrayProfilePersistence.loadAllowedApps(context)
         VpnManagerService.isBypassMode = XrayProfilePersistence.loadBypassMode(context)
         VpnManagerService.geoipRulesList = XrayProfilePersistence.loadGeoIpRules(context)
@@ -91,8 +86,6 @@ fun ProfilesScreen() {
         geoIpRules = VpnManagerService.geoipRulesList.toSet()
         geoSiteRules = VpnManagerService.geositeRulesList.toSet()
     }
-
-
 
     // Filter apps based on search query
     val filteredApps = remember(installedApps, searchQuery) {
@@ -110,14 +103,31 @@ fun ProfilesScreen() {
         modifier = Modifier
             .fillMaxSize()
             .background(DarkBg)
-            .padding(24.dp)
+            .padding(20.dp)
     ) {
-        // Headers
+        // Top Eyebrow Badge & Header
+        Surface(
+            color = CyberTeal.copy(alpha = 0.12f),
+            shape = RoundedCornerShape(100.dp),
+            border = BorderStroke(0.5.dp, CyberTeal.copy(alpha = 0.3f))
+        ) {
+            Text(
+                text = "DYNAMIC ROUTING ENGINE",
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                color = CyberTeal,
+                letterSpacing = 1.2.sp,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
         Text(
             text = string("profiles_title"),
-            fontSize = 20.sp,
+            fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
-            color = CyberTeal
+            color = TextWhite
         )
         Text(
             text = string("profiles_subtitle"),
@@ -125,16 +135,16 @@ fun ProfilesScreen() {
             color = TextGray
         )
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Cyber Segmented Tab Selector - Custom Segmented Pill Control
+        // High-End Agency-Tier 3-Segmented Glass Pill Tab Bar
         Surface(
             color = DarkCard,
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(14.dp),
             border = BorderStroke(0.5.dp, CardBorder),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 16.dp)
+                .padding(bottom = 12.dp)
                 .height(44.dp)
         ) {
             Row(
@@ -142,8 +152,9 @@ fun ProfilesScreen() {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 listOf(
-                    0 to string("routing_tab_apps"),
-                    1 to string("routing_tab_network")
+                    0 to string("routing_tab_smart"),
+                    1 to string("routing_tab_apps"),
+                    2 to string("routing_tab_custom")
                 ).forEach { (index, label) ->
                     val isSelected = activeSubTab == index
                     Box(
@@ -154,17 +165,14 @@ fun ProfilesScreen() {
                             .padding(3.dp)
                             .clip(RoundedCornerShape(10.dp))
                             .background(if (isSelected) CyberTeal else Color.Transparent)
-                            .clickable(
-                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                indication = null
-                            ) { activeSubTab = index }
+                            .clickable { activeSubTab = index }
                     ) {
                         Text(
                             text = label,
                             color = if (isSelected) DarkBg else TextWhite,
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
+                            letterSpacing = 0.5.sp
                         )
                     }
                 }
@@ -172,90 +180,135 @@ fun ProfilesScreen() {
         }
 
         // Sub Tab Content
-        if (activeSubTab == 0) {
-            AppRoutingPanel(
-                context = context,
-                installedApps = installedApps,
-                filteredApps = filteredApps,
-                allowedApps = allowedApps,
-                isBypassMode = isBypassMode,
-                searchQuery = searchQuery,
-                onSearchQueryChange = { searchQuery = it },
-                onBypassModeChange = { bypass ->
-                    isBypassMode = bypass
-                    VpnManagerService.isBypassMode = bypass
-                    XrayProfilePersistence.saveBypassMode(context, bypass)
-                },
-                onAllowedAppToggle = { pkgName, checked ->
-                    val nextSet = allowedApps.toMutableSet()
-                    if (checked) {
-                        nextSet.add(pkgName)
-                    } else {
-                        nextSet.remove(pkgName)
+        when (activeSubTab) {
+            0 -> {
+                SmartRoutingPanel(
+                    context = context,
+                    bypassRu = bypassRu,
+                    bypassTorrents = bypassTorrents,
+                    blockQuic = blockQuic,
+                    bypassLan = bypassLan,
+                    onBypassRuChange = { enabled ->
+                        bypassRu = enabled
+                        XrayProfilePersistence.saveBypassRuSites(context, enabled)
+                    },
+                    onBypassTorrentsChange = { enabled ->
+                        bypassTorrents = enabled
+                        XrayProfilePersistence.saveBypassTorrents(context, enabled)
+                    },
+                    onBlockQuicChange = { enabled ->
+                        blockQuic = enabled
+                        XrayProfilePersistence.saveBlockQuic(context, enabled)
+                    },
+                    onBypassLanChange = { enabled ->
+                        bypassLan = enabled
+                        XrayProfilePersistence.saveBypassLan(context, enabled)
                     }
-                    allowedApps = nextSet
-                    VpnManagerService.allowedAppsList = nextSet.toList()
-                    XrayProfilePersistence.saveAllowedApps(context, nextSet.toList())
-                }
-            )
-        } else {
-            NetworkRoutingPanel(
-                context = context,
-                geoIpRules = geoIpRules,
-                geoSiteRules = geoSiteRules,
-                customGeoIpInput = customGeoIpInput,
-                customGeoSiteInput = customGeoSiteInput,
-                onCustomGeoIpInputChange = { customGeoIpInput = it },
-                onCustomGeoSiteInputChange = { customGeoSiteInput = it },
-                onGeoIpRuleToggle = { preset, checked ->
-                    val nextSet = geoIpRules.toMutableSet()
-                    if (checked) nextSet.add(preset) else nextSet.remove(preset)
-                    geoIpRules = nextSet
-                    VpnManagerService.geoipRulesList = nextSet.toList()
-                    XrayProfilePersistence.saveGeoIpRules(context, nextSet.toList())
-                },
-                onGeoSiteRuleToggle = { preset, checked ->
-                    val nextSet = geoSiteRules.toMutableSet()
-                    if (checked) nextSet.add(preset) else nextSet.remove(preset)
-                    geoSiteRules = nextSet
-                    VpnManagerService.geositeRulesList = nextSet.toList()
-                    XrayProfilePersistence.saveGeoSiteRules(context, nextSet.toList())
-                },
-                onCustomGeoIpAdd = {
-                    if (customGeoIpInput.isNotEmpty()) {
+                )
+            }
+            1 -> {
+                AppRoutingPanel(
+                    context = context,
+                    installedApps = installedApps,
+                    filteredApps = filteredApps,
+                    allowedApps = allowedApps,
+                    isBypassMode = isBypassMode,
+                    searchQuery = searchQuery,
+                    onSearchQueryChange = { searchQuery = it },
+                    onBypassModeChange = { bypass ->
+                        isBypassMode = bypass
+                        VpnManagerService.isBypassMode = bypass
+                        XrayProfilePersistence.saveBypassMode(context, bypass)
+                    },
+                    onAllowedAppToggle = { pkgName, checked ->
+                        val nextSet = allowedApps.toMutableSet()
+                        if (checked) {
+                            nextSet.add(pkgName)
+                        } else {
+                            nextSet.remove(pkgName)
+                        }
+                        allowedApps = nextSet
+                        VpnManagerService.allowedAppsList = nextSet.toList()
+                        XrayProfilePersistence.saveAllowedApps(context, nextSet.toList())
+                    }
+                )
+            }
+            2 -> {
+                NetworkRoutingPanel(
+                    context = context,
+                    customDirectRules = customDirectRules,
+                    customProxyRules = customProxyRules,
+                    customBlockRules = customBlockRules,
+                    geoIpRules = geoIpRules,
+                    geoSiteRules = geoSiteRules,
+                    onAddCustomRule = { target, rule ->
+                        when (target) {
+                            "Direct" -> {
+                                val nextList = (customDirectRules + rule).distinct()
+                                customDirectRules = nextList
+                                XrayProfilePersistence.saveCustomDirectRules(context, nextList)
+                            }
+                            "Proxy" -> {
+                                val nextList = (customProxyRules + rule).distinct()
+                                customProxyRules = nextList
+                                XrayProfilePersistence.saveCustomProxyRules(context, nextList)
+                            }
+                            "Block" -> {
+                                val nextList = (customBlockRules + rule).distinct()
+                                customBlockRules = nextList
+                                XrayProfilePersistence.saveCustomBlockRules(context, nextList)
+                            }
+                        }
+                    },
+                    onRemoveCustomRule = { target, rule ->
+                        when (target) {
+                            "Direct" -> {
+                                val nextList = customDirectRules - rule
+                                customDirectRules = nextList
+                                XrayProfilePersistence.saveCustomDirectRules(context, nextList)
+                            }
+                            "Proxy" -> {
+                                val nextList = customProxyRules - rule
+                                customProxyRules = nextList
+                                XrayProfilePersistence.saveCustomProxyRules(context, nextList)
+                            }
+                            "Block" -> {
+                                val nextList = customBlockRules - rule
+                                customBlockRules = nextList
+                                XrayProfilePersistence.saveCustomBlockRules(context, nextList)
+                            }
+                        }
+                    },
+                    onGeoIpRuleToggle = { preset, checked ->
                         val nextSet = geoIpRules.toMutableSet()
-                        nextSet.add(customGeoIpInput.trim().lowercase())
+                        if (checked) nextSet.add(preset) else nextSet.remove(preset)
                         geoIpRules = nextSet
                         VpnManagerService.geoipRulesList = nextSet.toList()
                         XrayProfilePersistence.saveGeoIpRules(context, nextSet.toList())
-                        customGeoIpInput = ""
-                    }
-                },
-                onCustomGeoSiteAdd = {
-                    if (customGeoSiteInput.isNotEmpty()) {
+                    },
+                    onGeoSiteRuleToggle = { preset, checked ->
                         val nextSet = geoSiteRules.toMutableSet()
-                        nextSet.add(customGeoSiteInput.trim().lowercase())
+                        if (checked) nextSet.add(preset) else nextSet.remove(preset)
                         geoSiteRules = nextSet
                         VpnManagerService.geositeRulesList = nextSet.toList()
                         XrayProfilePersistence.saveGeoSiteRules(context, nextSet.toList())
-                        customGeoSiteInput = ""
+                    },
+                    onGeoIpRuleRemove = { customRule ->
+                        val nextSet = geoIpRules.toMutableSet()
+                        nextSet.remove(customRule)
+                        geoIpRules = nextSet
+                        VpnManagerService.geoipRulesList = nextSet.toList()
+                        XrayProfilePersistence.saveGeoIpRules(context, nextSet.toList())
+                    },
+                    onGeoSiteRuleRemove = { customRule ->
+                        val nextSet = geoSiteRules.toMutableSet()
+                        nextSet.remove(customRule)
+                        geoSiteRules = nextSet
+                        VpnManagerService.geositeRulesList = nextSet.toList()
+                        XrayProfilePersistence.saveGeoSiteRules(context, nextSet.toList())
                     }
-                },
-                onGeoIpRuleRemove = { customRule ->
-                    val nextSet = geoIpRules.toMutableSet()
-                    nextSet.remove(customRule)
-                    geoIpRules = nextSet
-                    VpnManagerService.geoipRulesList = nextSet.toList()
-                    XrayProfilePersistence.saveGeoIpRules(context, nextSet.toList())
-                },
-                onGeoSiteRuleRemove = { customRule ->
-                    val nextSet = geoSiteRules.toMutableSet()
-                    nextSet.remove(customRule)
-                    geoSiteRules = nextSet
-                    VpnManagerService.geositeRulesList = nextSet.toList()
-                    XrayProfilePersistence.saveGeoSiteRules(context, nextSet.toList())
-                }
-            )
+                )
+            }
         }
     }
 }
@@ -287,7 +340,6 @@ private suspend fun getInstalledApps(context: Context): List<AppInfo> = withCont
     val pm = context.packageManager
     val appMap = mutableMapOf<String, AppInfo>()
 
-    // Query Launcher Activities to capture all user-facing launchable apps
     try {
         val launcherIntent = android.content.Intent(android.content.Intent.ACTION_MAIN, null).apply {
             addCategory(android.content.Intent.CATEGORY_LAUNCHER)
@@ -297,7 +349,6 @@ private suspend fun getInstalledApps(context: Context): List<AppInfo> = withCont
             val appInfo = resolveInfo.activityInfo.applicationInfo
             val label = resolveInfo.loadLabel(pm).toString()
             
-            // Load application icon and convert it to ImageBitmap safely on IO thread
             val icon = try {
                 val drawable = appInfo.loadIcon(pm)
                 val bitmap = drawableToBitmap(drawable)

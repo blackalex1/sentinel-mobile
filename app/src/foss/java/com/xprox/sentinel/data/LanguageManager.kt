@@ -274,7 +274,29 @@ object LanguageManager {
         "btn_confirm_disconnect" to mapOf(Language.RU to "Отключить", Language.EN to "Disconnect"),
         "app_author_label" to mapOf(Language.RU to "АВТОР И РАЗРАБОТЧИК", Language.EN to "DEVELOPER & AUTHOR"),
         "app_author_by" to mapOf(Language.RU to "by", Language.EN to "by"),
-        "app_author_github_hint" to mapOf(Language.RU to "Нажмите, чтобы открыть профиль GitHub", Language.EN to "Tap to open GitHub profile")
+        "app_author_github_hint" to mapOf(Language.RU to "Нажмите, чтобы открыть профиль GitHub", Language.EN to "Tap to open GitHub profile"),
+        
+        "routing_tab_smart" to mapOf(Language.RU to "УМНЫЙ ОБХОД", Language.EN to "SMART RULES"),
+        "routing_tab_apps" to mapOf(Language.RU to "ПРИЛОЖЕНИЯ", Language.EN to "APPS"),
+        "routing_tab_custom" to mapOf(Language.RU to "СВОИ ПРАВИЛА", Language.EN to "CUSTOM & GEO"),
+        
+        "smart_ru_title" to mapOf(Language.RU to "Обход сайтов РФ (Direct RU)", Language.EN to "Bypass Russian Sites (Direct RU)"),
+        "smart_ru_desc" to mapOf(Language.RU to "Госуслуги, Яндекс, банки и VK идут напрямую мимо VPN без замедления", Language.EN to "Russian government, banking, services and VK route directly without VPN latency"),
+        
+        "smart_torrents_title" to mapOf(Language.RU to "Обход Торрентов (P2P Direct)", Language.EN to "Bypass Torrents (P2P Direct)"),
+        "smart_torrents_desc" to mapOf(Language.RU to "BitTorrent трафик и трекеры пускаются напрямую, сохраняя канал VPN", Language.EN to "BitTorrent traffic and trackers route directly to preserve VPN speed"),
+        
+        "smart_quic_title" to mapOf(Language.RU to "Блокировка QUIC (UDP 443)", Language.EN to "Block QUIC (UDP 443)"),
+        "smart_quic_desc" to mapOf(Language.RU to "Принудительно переключает браузеры на HTTP/2 для защиты от глушилок провайдеров", Language.EN to "Forces browsers to fallback to HTTP/2 to prevent ISP UDP throttling"),
+        
+        "smart_lan_title" to mapOf(Language.RU to "Обход локальной сети (Direct LAN)", Language.EN to "Bypass Local LAN (Direct LAN)"),
+        "smart_lan_desc" to mapOf(Language.RU to "Сохраняет прямой доступ к роутеру, принтерам и локальным устройствам (192.168.x.x)", Language.EN to "Preserves direct access to local router, printers, and LAN devices (192.168.x.x)"),
+        
+        "custom_target_direct" to mapOf(Language.RU to "Напрямую (Direct)", Language.EN to "Direct"),
+        "custom_target_proxy" to mapOf(Language.RU to "Через VPN (Proxy)", Language.EN to "Proxy"),
+        "custom_target_block" to mapOf(Language.RU to "Заблокировать (Block)", Language.EN to "Block"),
+        
+        "add_custom_domain_or_ip" to mapOf(Language.RU to "Домен или IP (напр. example.com, 1.2.3.4)", Language.EN to "Domain or IP (e.g. example.com, 1.2.3.4)")
     )
 }
 

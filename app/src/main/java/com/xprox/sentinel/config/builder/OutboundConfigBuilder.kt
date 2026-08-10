@@ -104,7 +104,8 @@ object OutboundConfigBuilder {
             append(",\n")
             append("  \"sockopt\": {\n")
             append("    \"tcpKeepAliveInterval\": 15,\n")
-            append("    \"tcpFastOpen\": true\n")
+            append("    \"tcpKeepAliveIdle\": 15,\n")
+            append("    \"tcpFastOpen\": false\n")
             append("  }\n")
             append("}")
         }

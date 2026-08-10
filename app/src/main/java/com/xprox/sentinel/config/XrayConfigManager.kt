@@ -253,6 +253,170 @@ object XrayConfigManager {
             else -> profile.type.lowercase()
         }
 
+        // Smart Routing Configurations
+        val isBypassRu = XrayProfilePersistence.loadBypassRuSites(context)
+        val isBypassTorrents = XrayProfilePersistence.loadBypassTorrents(context)
+        val isBlockQuic = XrayProfilePersistence.loadBlockQuic(context)
+        val isBypassLan = XrayProfilePersistence.loadBypassLan(context)
+
+        val customDirect = XrayProfilePersistence.loadCustomDirectRules(context)
+        val customProxy = XrayProfilePersistence.loadCustomProxyRules(context)
+        val customBlock = XrayProfilePersistence.loadCustomBlockRules(context)
+
+        fun isIpRule(rule: String): Boolean {
+            val t = rule.trim().lowercase()
+            return t.startsWith("geoip:") || t.contains("/") || t.matches(Regex("^[0-9.]+$")) || t.matches(Regex("^[0-9a-f:]+$"))
+        }
+
+        val ruDomainsList = listOf(
+            "geosite:category-gov-ru",
+            "geosite:category-bank-ru",
+            "geosite:category-ecommerce-ru",
+            "geosite:category-media-ru",
+            "geosite:category-retail-ru",
+            "geosite:yandex",
+            "geosite:vk",
+            "geosite:category-ru",
+            "api.ipify.org", "checkip.amazonaws.com", "ifconfig.me", "telega.me", "2gis.com", "2gis.ru",
+            "47news.ru", "alfabank.ru", "auth-nsdi.ru", "auto.ru", "avito.ru", "avito.st", "cdn-vk.ru",
+            "cikrf.ru", "dzen.ru", "gazeta.ru", "gosuslugi.ru", "gov.ru", "government.ru", "gu-st.ru",
+            "izbirkom.ru", "kinopoisk.ru", "kp.ru", "kremlin.ru", "lemanapro.ru", "lenta.ru", "lmru.tech",
+            "mail.ru", "max.ru", "mradx.net", "ok.ru", "okcdn.ru", "oneme.ru", "ozon.ru", "ozone.ru",
+            "pochta.ru", "rambler.ru", "rbc.ru", "res-nsdi.ru", "rutube.ru", "rutubelist.ru", "rzd.ru",
+            "t2.ru", "taximaxim.ru", "tutu.ru", "userapi.com", "vk-portal.net", "vk.com", "vk.ru",
+            "vtb.ru", "wb.ru", "wildberries.ru", "ya.ru", "yandex.com", "yandex.net", "yandex.ru",
+            "yastatic.net", "mos.ru", "tbank.ru", "cdn-tinkoff.ru", "tinkoff.ru", "nalog.ru"
+        )
+        val lanIpList = listOf(
+            "geoip:private",
+            "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16",
+            "172.16.0.0/12", "192.0.0.0/24", "192.0.2.0/24", "192.88.99.0/24", "192.168.0.0/16",
+            "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "224.0.0.0/3", "fc00::/7", "fe80::/10"
+        )
+        val torrentTrackers = listOf(
+            "geosite:rutracker",
+            "domain:bittorrent.com", "domain:utorrent.com", "domain:transmissionbt.com", "domain:vuze.com",
+            "domain:opentrackr.org", "domain:openbittorrent.com", "domain:publicbt.com", "domain:rarbg.com",
+            "domain:rutracker.org", "domain:rutor.is", "domain:opentor.org", "domain:nyaa.si"
+        )
+
+        // Combine Direct Domains & IPs
+        val directDomains = mutableListOf<String>()
+        val directIps = mutableListOf<String>()
+        if (isBypassRu) {
+            ruDomainsList.forEach { if (isIpRule(it)) directIps.add(it) else directDomains.add(it) }
+        }
+        if (isBypassTorrents) {
+            torrentTrackers.forEach { if (isIpRule(it)) directIps.add(it) else directDomains.add(it) }
+        }
+        if (isBypassLan) {
+            lanIpList.forEach { if (isIpRule(it)) directIps.add(it) else directDomains.add(it) }
+        }
+        
+        for (rule in customDirect) {
+            if (isIpRule(rule)) directIps.add(rule) else directDomains.add(rule)
+        }
+
+        // Combine Proxy Domains & IPs
+        val proxyDomains = mutableListOf<String>()
+        val proxyIps = mutableListOf<String>()
+        for (rule in customProxy) {
+            if (isIpRule(rule)) proxyIps.add(rule) else proxyDomains.add(rule)
+        }
+
+        // Combine Block Domains & IPs
+        val blockDomains = mutableListOf<String>()
+        val blockIps = mutableListOf<String>()
+        for (rule in customBlock) {
+            if (isIpRule(rule)) blockIps.add(rule) else blockDomains.add(rule)
+        }
+
+
+        val torrentProtocolRule = if (isBypassTorrents) """
+            {
+              "type": "field",
+              "protocol": ["bittorrent"],
+              "outboundTag": "direct"
+            },
+        """.trimIndent().prependIndent("              ") else ""
+
+        val quicBlockRule = if (isBlockQuic) """
+            {
+              "type": "field",
+              "port": 443,
+              "network": "udp",
+              "outboundTag": "block"
+            },
+        """.trimIndent().prependIndent("              ") else ""
+
+        val smartDirectDomainsRule = if (directDomains.isNotEmpty()) """
+            {
+              "type": "field",
+              "domain": ${directDomains.distinct().joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
+              "outboundTag": "direct"
+            },
+        """.trimIndent().prependIndent("              ") else ""
+
+        val smartDirectIpsRule = if (directIps.isNotEmpty()) """
+            {
+              "type": "field",
+              "ip": ${directIps.distinct().joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
+              "outboundTag": "direct"
+            },
+        """.trimIndent().prependIndent("              ") else ""
+
+        val smartProxyDomainsRule = if (proxyDomains.isNotEmpty()) """
+            {
+              "type": "field",
+              "domain": ${proxyDomains.distinct().joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
+              "outboundTag": "proxy"
+            },
+        """.trimIndent().prependIndent("              ") else ""
+
+        val smartProxyIpsRule = if (proxyIps.isNotEmpty()) """
+            {
+              "type": "field",
+              "ip": ${proxyIps.distinct().joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
+              "outboundTag": "proxy"
+            },
+        """.trimIndent().prependIndent("              ") else ""
+
+        val smartBlockDomainsRule = if (blockDomains.isNotEmpty()) """
+            {
+              "type": "field",
+              "domain": ${blockDomains.distinct().joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
+              "outboundTag": "block"
+            },
+        """.trimIndent().prependIndent("              ") else ""
+
+        val smartBlockIpsRule = if (blockIps.isNotEmpty()) """
+            {
+              "type": "field",
+              "ip": ${blockIps.distinct().joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
+              "outboundTag": "block"
+            },
+        """.trimIndent().prependIndent("              ") else ""
+
+        val geoipRuleJson = if (geoipRules.isNotEmpty()) {
+            """
+            {
+              "type": "field",
+              "ip": ${geoipRules.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
+              "outboundTag": "direct"
+            },
+            """.trimIndent().prependIndent("              ")
+        } else ""
+
+        val geositeRuleJson = if (geositeRules.isNotEmpty()) {
+            """
+            {
+              "type": "field",
+              "domain": ${geositeRules.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
+              "outboundTag": "proxy"
+            },
+            """.trimIndent().prependIndent("              ")
+        } else ""
+
         // Compile the template
         val json = """
         {
@@ -293,37 +457,22 @@ object XrayConfigManager {
           "routing": {
             "domainStrategy": "IPIfNonMatch",
             "rules": [
-$captureRules$blockedRuleJson
-$blockedPortsRuleJson
-$blockedUidsRuleJson
               {
                 "type": "field",
                 "inboundTag": $inboundsList,
                 "port": 53,
                 "outboundTag": "dns-out"
               },
-              {
-                "type": "field",
-                "port": 443,
-                "network": "udp",
-                "outboundTag": "block"
-              },
+$captureRules$blockedRuleJson
+$blockedPortsRuleJson
+$blockedUidsRuleJson
               {
                 "type": "field",
                 "inboundTag": ["tun-in"],
                 "port": 853,
                 "outboundTag": "block"
               },
-              {
-                "type": "field",
-                "ip": ${geoipRules.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
-                "outboundTag": "direct"
-              },
-              {
-                "type": "field",
-                "domain": ${geositeRules.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
-                "outboundTag": "proxy"
-              },
+$torrentProtocolRule$quicBlockRule$smartDirectDomainsRule$smartDirectIpsRule$smartProxyDomainsRule$smartProxyIpsRule$smartBlockDomainsRule$smartBlockIpsRule$geoipRuleJson$geositeRuleJson
               {
                 "type": "field",
                 "network": "tcp,udp",
