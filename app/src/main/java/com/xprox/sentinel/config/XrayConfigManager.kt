@@ -277,7 +277,7 @@ object XrayConfigManager {
             "geosite:yandex",
             "geosite:vk",
             "geosite:category-ru",
-            "api.ipify.org", "checkip.amazonaws.com", "ifconfig.me", "telega.me", "2gis.com", "2gis.ru",
+            "telega.me", "2gis.com", "2gis.ru",
             "47news.ru", "alfabank.ru", "auth-nsdi.ru", "auto.ru", "avito.ru", "avito.st", "cdn-vk.ru",
             "cikrf.ru", "dzen.ru", "gazeta.ru", "gosuslugi.ru", "gov.ru", "government.ru", "gu-st.ru",
             "izbirkom.ru", "kinopoisk.ru", "kp.ru", "kremlin.ru", "lemanapro.ru", "lenta.ru", "lmru.tech",
@@ -417,11 +417,14 @@ object XrayConfigManager {
             """.trimIndent().prependIndent("              ")
         } else ""
 
+        val prefs = context.getSharedPreferences("x_prox_sensitive_ports_prefs", Context.MODE_PRIVATE)
+        val logLevel = prefs.getString("xray_log_level", "info") ?: "info"
+
         // Compile the template
         val json = """
         {
           "log": {
-            "loglevel": "info"
+            "loglevel": "$logLevel"
           },
           "dns": {
             "servers": $dnsServersJson

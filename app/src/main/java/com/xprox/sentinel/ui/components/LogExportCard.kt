@@ -1,6 +1,9 @@
 package com.xprox.sentinel.ui.components
 
 import android.content.Context
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -106,6 +109,82 @@ fun LogExportCard(
                     ),
                     modifier = Modifier.scale(0.85f)
                 )
+            }
+
+            HorizontalDivider(
+                color = CardBorder,
+                thickness = 0.5.dp,
+                modifier = Modifier.padding(vertical = 12.dp)
+            )
+
+            var xrayLogLevel by remember { mutableStateOf(prefs.getString("xray_log_level", "info") ?: "info") }
+            val levels = listOf("debug", "info", "warning", "error", "none")
+
+            Text(
+                text = if (isRu) "Уровень логов Xray-core" else "Xray-core Log Level",
+                fontSize = 13.sp,
+                color = TextWhite,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = if (isRu) "Выберите детализацию системного ядра Xray" else "Select verbosity for Xray native process",
+                fontSize = 11.sp,
+                color = TextGray
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(DarkBg)
+                    .border(1.dp, CardBorder, RoundedCornerShape(10.dp))
+                    .padding(3.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    levels.forEach { level ->
+                        val isSelected = xrayLogLevel.equals(level, ignoreCase = true)
+                        val chipColor = when (level) {
+                            "debug" -> CyberTeal
+                            "info" -> SecureGreen
+                            "warning" -> WarningYellow
+                            "error" -> WarningRed
+                            else -> TextGray
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(7.dp))
+                                .background(if (isSelected) chipColor.copy(alpha = 0.2f) else androidx.compose.ui.graphics.Color.Transparent)
+                                .border(
+                                    width = if (isSelected) 1.dp else 0.dp,
+                                    color = if (isSelected) chipColor else androidx.compose.ui.graphics.Color.Transparent,
+                                    shape = RoundedCornerShape(7.dp)
+                                )
+                                .clickable {
+                                    xrayLogLevel = level
+                                    prefs.edit().putString("xray_log_level", level).apply()
+                                }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = level.uppercase(),
+                                fontSize = 10.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) chipColor else TextGray,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                            )
+                        }
+                    }
+                }
             }
         }
     }
