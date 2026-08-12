@@ -68,12 +68,13 @@ fun AboutAppCard() {
                         }
                 ) {
                     Text(
-                        text = "by ",
+                        text = "repo: ",
                         fontSize = 11.sp,
-                        color = TextGray
+                        color = TextGray,
+                        fontFamily = FontFamily.Monospace
                     )
                     Text(
-                        text = "blackalex1",
+                        text = "blackalex1/sentinel-mobile",
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = CyberCyan,
