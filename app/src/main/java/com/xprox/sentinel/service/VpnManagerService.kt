@@ -94,7 +94,13 @@ class VpnManagerService : VpnService() {
         }
 
         fun fetchPublicIp(socksPort: Int = 0) {
-            VpnNetworkHelper.fetchPublicIp(socksPort, _publicIpFlow)
+            val creds = _activeCredentials.value
+            VpnNetworkHelper.fetchPublicIp(
+                socksPort = socksPort,
+                username = creds?.username,
+                token = creds?.token,
+                publicIpFlow = _publicIpFlow
+            )
         }
     }
 
@@ -302,15 +308,13 @@ class VpnManagerService : VpnService() {
             ).apply { start() }
 
             // Initialize Sentinel Pairing Server for Zero-Touch PC PIN Pairing
-            if (XrayProfilePersistence.loadLanSharing(this)) {
-                sentinelPairingServer = SentinelPairingServer(this, 18080).apply {
-                    start(
-                        socksPort = lanSocksPort,
-                        httpPort = lanHttpPort,
-                        username = lanCreds?.username,
-                        token = lanCreds?.token
-                    )
-                }
+            sentinelPairingServer = SentinelPairingServer(this, 18080).apply {
+                start(
+                    socksPort = lanSocksPort,
+                    httpPort = lanHttpPort,
+                    username = lanCreds?.username,
+                    token = lanCreds?.token
+                )
             }
 
             // 2. Generate/Compile client configuration file
@@ -448,13 +452,17 @@ class VpnManagerService : VpnService() {
             // 5. Start background speed monitor loop
             speedMonitorJob?.cancel()
             var lastShowSpeed = XrayProfilePersistence.loadShowSpeedInNotification(this)
+            var lastNotifUpdateTime = 0L
             var lastSpeedText: String? = null
             speedMonitorJob = VpnSpeedMonitor.start(serviceScope, _isRunningFlow) { speedText ->
                 _speedFlow.value = speedText
                 val showSpeed = XrayProfilePersistence.loadShowSpeedInNotification(this)
                 val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                val now = System.currentTimeMillis()
+                
+                // Only update notification every 5+ seconds if speed changed, to eliminate SystemUI alarm thrashing
                 if (showSpeed) {
-                    if (speedText != lastSpeedText || !lastShowSpeed) {
+                    if ((now - lastNotifUpdateTime > 5000L && speedText != lastSpeedText) || !lastShowSpeed) {
                         val notif = VpnNotificationHelper.createNotification(
                             context = this,
                             profileName = selectedProfile.name,
@@ -464,6 +472,7 @@ class VpnManagerService : VpnService() {
                         )
                         manager.notify(VpnNotificationHelper.NOTIFICATION_ID, notif)
                         lastSpeedText = speedText
+                        lastNotifUpdateTime = now
                     }
                 } else if (lastShowSpeed) {
                     // Reset once to standard static notification when toggled off
@@ -476,6 +485,7 @@ class VpnManagerService : VpnService() {
                     )
                     manager.notify(VpnNotificationHelper.NOTIFICATION_ID, notif)
                     lastSpeedText = null
+                    lastNotifUpdateTime = now
                 }
                 lastShowSpeed = showSpeed
             }
@@ -487,9 +497,14 @@ class VpnManagerService : VpnService() {
                 launch {
                     delay(1500)
                     val port = _activePortFlow.value
+                    val creds = _activeCredentials.value
                     if (port > 0) {
                         for (attempt in 1..4) {
-                            val ip = VpnNetworkHelper.suspendFetchPublicIp(port)
+                            val ip = VpnNetworkHelper.suspendFetchPublicIp(
+                                socksPort = port,
+                                username = creds?.username,
+                                token = creds?.token
+                            )
                             if (ip != null) {
                                 _publicIpFlow.value = ip
                                 break
@@ -599,7 +614,11 @@ class VpnManagerService : VpnService() {
                     val port = creds.port
                     if (port > 0) {
                         for (attempt in 1..4) {
-                            val ip = VpnNetworkHelper.suspendFetchPublicIp(port)
+                            val ip = VpnNetworkHelper.suspendFetchPublicIp(
+                                socksPort = port,
+                                username = creds.username,
+                                token = creds.token
+                            )
                             if (ip != null) {
                                 _publicIpFlow.value = ip
                                 break

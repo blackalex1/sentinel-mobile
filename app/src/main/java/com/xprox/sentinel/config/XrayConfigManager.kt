@@ -311,6 +311,32 @@ object XrayConfigManager {
             "domain:rutracker.org", "domain:rutor.is", "domain:opentor.org", "domain:nyaa.si"
         )
 
+        // Dynamic Quick Actions Preferences from SmartRoutingPanel
+        val quickPrefs = context.getSharedPreferences("sentinel_quick_actions_prefs", Context.MODE_PRIVATE)
+        val enabledIpService = quickPrefs.getBoolean("enabled_ip_service", true)
+        val actionIpService = quickPrefs.getString("action_ip_service", "DIRECT") ?: "DIRECT"
+        val enabledAds = quickPrefs.getBoolean("enabled_ads", false)
+        val actionAds = quickPrefs.getString("action_ads", "BLOCKED") ?: "BLOCKED"
+        val enabledCn = quickPrefs.getBoolean("enabled_cn", false)
+        val actionCn = quickPrefs.getString("action_cn", "BLOCKED") ?: "BLOCKED"
+        val enabledUs = quickPrefs.getBoolean("enabled_us", false)
+        val actionUs = quickPrefs.getString("action_us", "BLOCKED") ?: "BLOCKED"
+
+        val ipCheckerDomains = listOf(
+            "domain:ipify.org", "domain:api.ipify.org", "domain:checkip.amazonaws.com", "domain:ifconfig.me", "domain:ifconfig.co", "domain:ifconfig.io",
+            "domain:telega.me", "domain:ipinfo.io", "domain:2ip.ru", "domain:2ip.io", "domain:2ip.ua", "domain:2ip.me",
+            "domain:myip.ru", "domain:myip.com", "domain:icanhazip.com", "domain:wtfismyip.com", "domain:ip.sb",
+            "domain:ipapi.co", "domain:ip-api.com", "domain:ipapi.com", "domain:db-ip.com", "domain:whoer.net",
+            "domain:ipwhois.io", "domain:ipwho.is", "domain:ipaddress.my", "domain:ipaddress.com", "domain:check-host.net",
+            "domain:browserleaks.com", "domain:ip2location.com", "domain:ip2location.io", "domain:showmyip.com",
+            "domain:whatsmyip.org", "domain:whatismyip.com", "domain:whatsmyipaddress.com", "domain:whatismyipaddress.com",
+            "domain:dnsleaktest.com", "domain:ipleak.net", "domain:ip.me", "domain:ip.cn", "domain:ip138.com",
+            "domain:ident.me", "domain:curlmyip.org", "domain:eth0.me", "domain:myexternalip.com", "domain:ip.nf",
+            "domain:trackip.net", "domain:checkip.dyndns.org",
+            "keyword:ipify", "keyword:2ip", "keyword:ipwhois", "keyword:icanhazip", "keyword:ifconfig", "keyword:checkip", "keyword:browserleaks", "keyword:whoer", "keyword:ipleak"
+        )
+        val ipCheckerIps = listOf("1.1.1.1/32", "1.0.0.1/32")
+
         // Combine Direct Domains & IPs
         val directDomains = mutableListOf<String>()
         val directIps = mutableListOf<String>()
@@ -340,6 +366,56 @@ object XrayConfigManager {
         val blockIps = mutableListOf<String>()
         for (rule in customBlock) {
             if (isIpRule(rule)) blockIps.add(rule) else blockDomains.add(rule)
+        }
+
+        // Apply Quick IP Checkers Rule
+        if (enabledIpService) {
+            when (actionIpService.uppercase()) {
+                "BLOCKED" -> {
+                    blockDomains.addAll(ipCheckerDomains)
+                    blockIps.addAll(ipCheckerIps)
+                }
+                "VPN", "PROXY" -> {
+                    proxyDomains.addAll(ipCheckerDomains)
+                    proxyIps.addAll(ipCheckerIps)
+                }
+                "DIRECT" -> {
+                    directDomains.addAll(ipCheckerDomains)
+                    directIps.addAll(ipCheckerIps)
+                }
+            }
+        }
+
+        // Apply Quick Ads Rule
+        if (enabledAds) {
+            val adsDomains = listOf("geosite:category-ads-all")
+            when (actionAds.uppercase()) {
+                "DIRECT" -> directDomains.addAll(adsDomains)
+                "VPN" -> proxyDomains.addAll(adsDomains)
+                else -> blockDomains.addAll(adsDomains)
+            }
+        }
+
+        // Apply Quick China Rule
+        if (enabledCn) {
+            val cnDomains = listOf("geosite:cn")
+            val cnIps = listOf("geoip:cn")
+            when (actionCn.uppercase()) {
+                "DIRECT" -> { directDomains.addAll(cnDomains); directIps.addAll(cnIps) }
+                "VPN" -> { proxyDomains.addAll(cnDomains); proxyIps.addAll(cnIps) }
+                else -> { blockDomains.addAll(cnDomains); blockIps.addAll(cnIps) }
+            }
+        }
+
+        // Apply Quick US Rule
+        if (enabledUs) {
+            val usDomains = listOf("geosite:us")
+            val usIps = listOf("geoip:us")
+            when (actionUs.uppercase()) {
+                "DIRECT" -> { directDomains.addAll(usDomains); directIps.addAll(usIps) }
+                "VPN" -> { proxyDomains.addAll(usDomains); proxyIps.addAll(usIps) }
+                else -> { blockDomains.addAll(usDomains); blockIps.addAll(usIps) }
+            }
         }
 
 

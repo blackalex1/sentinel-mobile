@@ -28,6 +28,16 @@ enum class QuickAction(val label: String, val badgeColor: Color) {
     VPN("VPN", ElectricViolet)
 }
 
+private fun parseQuickAction(name: String?, default: QuickAction): QuickAction {
+    if (name == null) return default
+    return when (name.uppercase()) {
+        "VPN", "PROXY" -> QuickAction.VPN
+        "DIRECT" -> QuickAction.DIRECT
+        "BLOCKED", "BLOCK" -> QuickAction.BLOCKED
+        else -> default
+    }
+}
+
 @Composable
 fun SmartRoutingPanel(
     context: Context,
@@ -44,13 +54,13 @@ fun SmartRoutingPanel(
 
     val prefs = remember { context.getSharedPreferences("sentinel_quick_actions_prefs", Context.MODE_PRIVATE) }
 
-    var actionBt by remember { mutableStateOf(QuickAction.valueOf(prefs.getString("action_bt", "BLOCKED") ?: "BLOCKED")) }
-    var actionAds by remember { mutableStateOf(QuickAction.valueOf(prefs.getString("action_ads", "BLOCKED") ?: "BLOCKED")) }
-    var actionCn by remember { mutableStateOf(QuickAction.valueOf(prefs.getString("action_cn", "BLOCKED") ?: "BLOCKED")) }
-    var actionRu by remember { mutableStateOf(QuickAction.valueOf(prefs.getString("action_ru", "DIRECT") ?: "DIRECT")) }
-    var actionUs by remember { mutableStateOf(QuickAction.valueOf(prefs.getString("action_us", "BLOCKED") ?: "BLOCKED")) }
-    var actionIpService by remember { mutableStateOf(QuickAction.valueOf(prefs.getString("action_ip_service", "DIRECT") ?: "DIRECT")) }
-    var actionLan by remember { mutableStateOf(QuickAction.valueOf(prefs.getString("action_lan", "DIRECT") ?: "DIRECT")) }
+    var actionBt by remember { mutableStateOf(parseQuickAction(prefs.getString("action_bt", null), QuickAction.BLOCKED)) }
+    var actionAds by remember { mutableStateOf(parseQuickAction(prefs.getString("action_ads", null), QuickAction.BLOCKED)) }
+    var actionCn by remember { mutableStateOf(parseQuickAction(prefs.getString("action_cn", null), QuickAction.BLOCKED)) }
+    var actionRu by remember { mutableStateOf(parseQuickAction(prefs.getString("action_ru", null), QuickAction.DIRECT)) }
+    var actionUs by remember { mutableStateOf(parseQuickAction(prefs.getString("action_us", null), QuickAction.BLOCKED)) }
+    var actionIpService by remember { mutableStateOf(parseQuickAction(prefs.getString("action_ip_service", null), QuickAction.DIRECT)) }
+    var actionLan by remember { mutableStateOf(parseQuickAction(prefs.getString("action_lan", null), QuickAction.DIRECT)) }
 
     var enabledAds by remember { mutableStateOf(prefs.getBoolean("enabled_ads", false)) }
     var enabledCn by remember { mutableStateOf(prefs.getBoolean("enabled_cn", false)) }

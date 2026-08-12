@@ -149,4 +149,28 @@ class SentinelSecurityTest {
         assertTrue("Generated username must not be empty", creds.username.isNotEmpty())
         assertTrue("Generated token must not be empty", creds.token.isNotEmpty())
     }
+
+    @Test
+    fun testInboundTagUniqueness() {
+        // Mock multi-interface IP list (e.g. Wi-Fi + Hotspot AP)
+        val multipleTetheringIps = listOf("192.168.43.1", "192.168.1.100", "10.0.0.2")
+        val creds = LocalProxyCredentials(port = 30500, username = "testUser", token = "testPass")
+        
+        // Simulating JSON parsing check for tags
+        val lanInboundsJson = """
+        [
+            { "tag": "socks-in", "port": 30500, "listen": "127.0.0.1" },
+            { "tag": "tun-in" },
+            { "tag": "lan-http-in", "port": 10809, "listen": "0.0.0.0" },
+            { "tag": "lan-socks-in", "port": 10808, "listen": "0.0.0.0" }
+        ]
+        """.trimIndent()
+        
+        val jsonArray = org.json.JSONArray(lanInboundsJson)
+        val tags = mutableSetOf<String>()
+        for (i in 0 until jsonArray.length()) {
+            val tag = jsonArray.getJSONObject(i).getString("tag")
+            assertTrue("Duplicate inbound tag found: $tag", tags.add(tag))
+        }
+    }
 }

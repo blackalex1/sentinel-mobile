@@ -51,52 +51,52 @@ object InboundConfigBuilder {
             append("              }\n")
             append("            }")
 
-            if (isLanSharingEnabled && (lanHttpEnabled || lanSocksEnabled)) {
-                val ipsToBind = tetheringIps.filter { it.isNotEmpty() }
+            if (isLanSharingEnabled) {
                 val lanInbounds = mutableListOf<String>()
-                val bindIps = if (ipsToBind.isNotEmpty()) ipsToBind else listOf("0.0.0.0")
-                
-                for (ip in bindIps) {
-                    if (lanHttpEnabled) {
-                        val httpAuthJson = if (lanAuthEnabled && lanCreds != null) {
-                            ",\n                \"accounts\": [\n                  {\n                    \"user\": \"${lanCreds.username}\",\n                    \"pass\": \"${lanCreds.token}\"\n                  }\n                ]"
-                        } else ""
-                        
-                        lanInbounds.add("""
-                        {
-                          "tag": "lan-http-in",
-                          "port": ${lanHttpPort},
-                          "listen": "$ip",
-                          "protocol": "http",
-                          "settings": {
-                            "allowTransparent": false$httpAuthJson
-                          }
-                        }
-                        """.trimIndent())
+
+                if (lanHttpEnabled) {
+                    val httpAuthJson = if (lanCreds != null) {
+                        ",\n                \"accounts\": [\n                  {\n                    \"user\": \"${lanCreds.username}\",\n                    \"pass\": \"${lanCreds.token}\"\n                  }\n                ]"
+                    } else ""
+
+                    lanInbounds.add("""
+                    {
+                      "tag": "lan-http-in",
+                      "port": ${lanHttpPort},
+                      "listen": "0.0.0.0",
+                      "protocol": "http",
+                      "settings": {
+                        "allowTransparent": false$httpAuthJson
+                      },
+                      "sniffing": {
+                        "enabled": true,
+                        "destOverride": ["http", "tls", "quic"]
+                      }
                     }
-                    
-                    if (lanSocksEnabled) {
-                        val socksAuthJson = if (lanAuthEnabled && lanCreds != null) {
-                            "\"auth\": \"password\",\n    \"accounts\": [\n      {\n        \"user\": \"${lanCreds.username}\",\n        \"pass\": \"${lanCreds.token}\"\n      }\n    ],"
-                        } else {
-                            "\"auth\": \"noauth\","
-                        }
-                        
-                        lanInbounds.add("""
-                        {
-                          "tag": "lan-socks-in",
-                          "port": ${lanSocksPort},
-                          "listen": "$ip",
-                          "protocol": "socks",
-                          "settings": {
-                            $socksAuthJson
-                            "udp": true
-                          }
-                        }
-                        """.trimIndent())
-                    }
+                    """.trimIndent())
                 }
-                
+
+                if (lanSocksEnabled) {
+                    val socksAuthJson = if (lanCreds != null) {
+                        "\"auth\": \"password\",\n    \"accounts\": [\n      {\n        \"user\": \"${lanCreds.username}\",\n        \"pass\": \"${lanCreds.token}\"\n      }\n    ],"
+                    } else {
+                        "\"auth\": \"noauth\","
+                    }
+
+                    lanInbounds.add("""
+                    {
+                      "tag": "lan-socks-in",
+                      "port": ${lanSocksPort},
+                      "listen": "0.0.0.0",
+                      "protocol": "socks",
+                      "settings": {
+                        $socksAuthJson
+                        "udp": true
+                      }
+                    }
+                    """.trimIndent())
+                }
+
                 if (lanInbounds.isNotEmpty()) {
                     append(",\n")
                     append(lanInbounds.joinToString(separator = ",\n") { it.prependIndent("            ") })
@@ -113,13 +113,11 @@ object InboundConfigBuilder {
         val lanHttpEnabled = XrayProfilePersistence.loadLanSharingHttp(context)
         val lanSocksEnabled = XrayProfilePersistence.loadLanSharingSocks(context)
 
-        return buildString {
-            append("[\"tun-in\", \"socks-in\"")
-            if (isLanSharingEnabled) {
-                if (lanHttpEnabled) append(", \"lan-http-in\"")
-                if (lanSocksEnabled) append(", \"lan-socks-in\"")
-            }
-            append("]")
+        val tags = mutableListOf("tun-in", "socks-in")
+        if (isLanSharingEnabled) {
+            if (lanHttpEnabled) tags.add("lan-http-in")
+            if (lanSocksEnabled) tags.add("lan-socks-in")
         }
+        return tags.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }
     }
 }

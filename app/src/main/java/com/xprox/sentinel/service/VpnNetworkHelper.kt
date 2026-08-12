@@ -44,12 +44,26 @@ object VpnNetworkHelper {
         }
     }
 
-    suspend fun suspendFetchPublicIp(socksPort: Int = 0): String? {
+    suspend fun suspendFetchPublicIp(
+        socksPort: Int = 0,
+        username: String? = null,
+        token: String? = null
+    ): String? {
         val endpoints = listOf(
             "https://api.ipify.org",
             "https://icanhazip.com",
-            "https://checkip.amazonaws.com"
+            "https://checkip.amazonaws.com",
+            "https://ifconfig.me/ip"
         )
+
+        if (socksPort > 0 && !username.isNullOrEmpty() && !token.isNullOrEmpty()) {
+            java.net.Authenticator.setDefault(object : java.net.Authenticator() {
+                override fun getPasswordAuthentication(): java.net.PasswordAuthentication {
+                    return java.net.PasswordAuthentication(username, token.toCharArray())
+                }
+            })
+        }
+
         val proxy = if (socksPort > 0) {
             Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socksPort))
         } else {
@@ -82,12 +96,13 @@ object VpnNetworkHelper {
 
     fun fetchPublicIp(
         socksPort: Int = 0,
-        publicIpFlow: MutableStateFlow<String?>,
-        bypassSocketProtect: ((Socket) -> Unit)? = null
+        username: String? = null,
+        token: String? = null,
+        publicIpFlow: MutableStateFlow<String?>
     ) {
         publicIpFlow.value = null
         CoroutineScope(Dispatchers.IO).launch {
-            val ip = suspendFetchPublicIp(socksPort)
+            val ip = suspendFetchPublicIp(socksPort, username, token)
             if (ip != null) {
                 publicIpFlow.value = ip
             }

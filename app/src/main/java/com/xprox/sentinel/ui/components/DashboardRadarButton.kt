@@ -14,7 +14,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Icon
@@ -22,12 +21,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
@@ -85,64 +81,6 @@ fun DashboardRadarButton(
         }
     }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "radar")
-    
-    val pulseRadius by if (isRunning) {
-        infiniteTransition.animateFloat(
-            initialValue = 0.1f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(2400, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "radius"
-        )
-    } else {
-        remember { mutableStateOf(0f) }
-    }
-
-    val pulseAlpha by if (isRunning) {
-        infiniteTransition.animateFloat(
-            initialValue = 0.6f,
-            targetValue = 0f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(2400, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "alpha"
-        )
-    } else {
-        remember { mutableStateOf(0f) }
-    }
-
-    val glowBreathe by if (isRunning) {
-        infiniteTransition.animateFloat(
-            initialValue = 0.35f,
-            targetValue = 0.75f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(1800, easing = LinearEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "glowBreathe"
-        )
-    } else {
-        remember { mutableStateOf(0.3f) }
-    }
-
-    val rotation by if (isRunning) {
-        infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 360f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(4000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "rotation"
-        )
-    } else {
-        remember { mutableStateOf(0f) }
-    }
-
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -150,8 +88,6 @@ fun DashboardRadarButton(
         animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
         label = "scale"
     )
-
-    val activeGlowColor = if (isRunning) SecureGreen else ElectricViolet
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -161,51 +97,14 @@ fun DashboardRadarButton(
             contentAlignment = Alignment.Center,
             modifier = Modifier.size(230.dp)
         ) {
-            // Ambient Radial Aura Glow
-            Canvas(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer(scaleX = scale, scaleY = scale)
-            ) {
-                if (isRunning) {
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                SecureGreen.copy(alpha = 0.35f * glowBreathe),
-                                CyberCyan.copy(alpha = 0.12f * glowBreathe),
-                                Color.Transparent
-                            )
-                        ),
-                        radius = size.minDimension * 0.48f
-                    )
-                }
-            }
-
-            // Radar Ripple Wave Animation
-            if (isRunning) {
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer(scaleX = scale, scaleY = scale)
-                ) {
-                    drawCircle(
-                        color = SecureGreen,
-                        radius = (size.minDimension / 2) * pulseRadius,
-                        style = Stroke(width = 2.dp.toPx()),
-                        alpha = pulseAlpha
-                    )
-                }
-            }
-
-            // Outer Rotating Bezel Ring
+            // Outer Bezel Ring
             Surface(
                 modifier = Modifier
                     .size(184.dp)
-                    .graphicsLayer(
-                        rotationZ = rotation,
-                        scaleX = scale,
+                    .graphicsLayer {
+                        scaleX = scale
                         scaleY = scale
-                    ),
+                    },
                 shape = CircleShape,
                 color = Color.Transparent,
                 border = BorderStroke(
@@ -224,11 +123,10 @@ fun DashboardRadarButton(
             Canvas(
                 modifier = Modifier
                     .size(156.dp)
-                    .graphicsLayer(
-                        rotationZ = -rotation * 0.6f,
-                        scaleX = scale,
+                    .graphicsLayer {
+                        scaleX = scale
                         scaleY = scale
-                    )
+                    }
             ) {
                 drawCircle(
                     color = if (isRunning) SecureGreen.copy(alpha = 0.35f) else ElectricViolet.copy(alpha = 0.25f),
@@ -243,16 +141,10 @@ fun DashboardRadarButton(
             Surface(
                 modifier = Modifier
                     .size(132.dp)
-                    .graphicsLayer(
-                        scaleX = scale,
+                    .graphicsLayer {
+                        scaleX = scale
                         scaleY = scale
-                    )
-                    .shadow(
-                        elevation = if (isPressed) 4.dp else 24.dp,
-                        shape = CircleShape,
-                        ambientColor = if (isRunning) SecureGreen else ElectricViolet,
-                        spotColor = if (isRunning) SecureGreen else ElectricViolet
-                    )
+                    }
                     .clickable(
                         interactionSource = interactionSource,
                         indication = null,

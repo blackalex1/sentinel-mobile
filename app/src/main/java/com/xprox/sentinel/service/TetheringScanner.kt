@@ -40,23 +40,26 @@ object TetheringScanner {
             val interfaces = NetworkInterface.getNetworkInterfaces()
             while (interfaces.hasMoreElements()) {
                 val iface = interfaces.nextElement()
+                if (iface.isLoopback || iface.name.lowercase().contains("tun")) continue
                 val name = iface.name.lowercase()
                 
-                // Hotspot, USB tethering, and other standard tethering interfaces
-                if (name.contains("ap") || 
-                    name.contains("wlan1") || 
-                    name.contains("wlan2") || 
-                    name.contains("rndis") || 
-                    name.contains("tether") || 
-                    name.contains("swlan") ||
-                    name.contains("bridge")
-                ) {
-                    val addresses = iface.inetAddresses
-                    while (addresses.hasMoreElements()) {
-                        val addr = addresses.nextElement()
-                        if (!addr.isLoopbackAddress && addr is Inet4Address) {
-                            val ip = addr.hostAddress
-                            if (ip != null && isPrivateIp(ip)) {
+                val addresses = iface.inetAddresses
+                while (addresses.hasMoreElements()) {
+                    val addr = addresses.nextElement()
+                    if (!addr.isLoopbackAddress && addr is Inet4Address) {
+                        val ip = addr.hostAddress
+                        if (ip != null && isPrivateIp(ip) && !ips.contains(ip)) {
+                            // Prioritize hotspot/tethering interfaces at top
+                            if (name.contains("ap") || 
+                                name.contains("rndis") || 
+                                name.contains("tether") || 
+                                name.contains("swlan") || 
+                                name.contains("bridge") ||
+                                name.contains("wlan1") ||
+                                name.contains("wlan2")
+                            ) {
+                                ips.add(0, ip)
+                            } else {
                                 ips.add(ip)
                             }
                         }
@@ -65,28 +68,6 @@ object TetheringScanner {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to scan network interfaces", e)
-        }
-        
-        // Fallback: search all interfaces except loopback and VPN, strictly private IPs
-        if (ips.isEmpty()) {
-            try {
-                val interfaces = NetworkInterface.getNetworkInterfaces()
-                while (interfaces.hasMoreElements()) {
-                    val iface = interfaces.nextElement()
-                    if (iface.isLoopback || iface.name.lowercase().contains("tun")) continue
-                    val addresses = iface.inetAddresses
-                    while (addresses.hasMoreElements()) {
-                        val addr = addresses.nextElement()
-                        if (!addr.isLoopbackAddress && addr is Inet4Address) {
-                            val ip = addr.hostAddress
-                            // Exclude primary Wi-Fi interface if possible (wlan0), ensure private IP
-                            if (iface.name.lowercase() != "wlan0" && ip != null && isPrivateIp(ip)) {
-                                ips.add(ip)
-                            }
-                        }
-                    }
-                }
-            } catch (e: Exception) {}
         }
         return ips
     }
