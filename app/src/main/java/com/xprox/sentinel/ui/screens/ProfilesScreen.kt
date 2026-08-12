@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,9 +48,7 @@ fun ProfilesScreen() {
 
     // App Split Tunneling State
     var installedApps by remember { mutableStateOf<List<AppInfo>>(emptyList()) }
-    var allowedApps by remember { mutableStateOf(emptySet<String>()) }
     var searchQuery by remember { mutableStateOf("") }
-    var isBypassMode by remember { mutableStateOf(true) }
 
     // Custom Rules State (Direct, Proxy, Block)
     var customDirectRules by remember { mutableStateOf(emptyList<String>()) }
@@ -80,9 +80,6 @@ fun ProfilesScreen() {
         VpnManagerService.geoipRulesList = XrayProfilePersistence.loadGeoIpRules(context)
         VpnManagerService.geositeRulesList = XrayProfilePersistence.loadGeoSiteRules(context)
 
-        // Initialize UI states
-        allowedApps = VpnManagerService.allowedAppsList.toSet()
-        isBypassMode = VpnManagerService.isBypassMode
         geoIpRules = VpnManagerService.geoipRulesList.toSet()
         geoSiteRules = VpnManagerService.geositeRulesList.toSet()
     }
@@ -102,22 +99,23 @@ fun ProfilesScreen() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(DarkBg)
+            .background(Color.Transparent)
             .padding(20.dp)
     ) {
         // Top Eyebrow Badge & Header
         Surface(
-            color = CyberTeal.copy(alpha = 0.12f),
+            color = ElectricViolet.copy(alpha = 0.15f),
             shape = RoundedCornerShape(100.dp),
-            border = BorderStroke(0.5.dp, CyberTeal.copy(alpha = 0.3f))
+            border = BorderStroke(1.dp, ElectricViolet.copy(alpha = 0.4f))
         ) {
             Text(
                 text = "DYNAMIC ROUTING ENGINE",
                 fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
-                color = CyberTeal,
+                color = ElectricViolet,
+                fontFamily = FontFamily.Monospace,
                 letterSpacing = 1.2.sp,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
             )
         }
 
@@ -139,13 +137,13 @@ fun ProfilesScreen() {
 
         // High-End Agency-Tier 3-Segmented Glass Pill Tab Bar
         Surface(
-            color = DarkCard,
-            shape = RoundedCornerShape(14.dp),
-            border = BorderStroke(0.5.dp, CardBorder),
+            color = DarkCardElevated,
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, CardBorder),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 12.dp)
-                .height(44.dp)
+                .padding(bottom = 14.dp)
+                .height(46.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxSize(),
@@ -157,21 +155,33 @@ fun ProfilesScreen() {
                     2 to string("routing_tab_custom")
                 ).forEach { (index, label) ->
                     val isSelected = activeSubTab == index
+
+                    val tabBg by animateColorAsState(
+                        targetValue = if (isSelected) ElectricViolet else Color.Transparent,
+                        label = "tabBg"
+                    )
+
+                    val tabTextColor by animateColorAsState(
+                        targetValue = if (isSelected) TextWhite else TextGray,
+                        label = "tabTextColor"
+                    )
+
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
-                            .padding(3.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (isSelected) CyberTeal else Color.Transparent)
+                            .padding(4.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(tabBg)
                             .clickable { activeSubTab = index }
                     ) {
                         Text(
                             text = label,
-                            color = if (isSelected) DarkBg else TextWhite,
-                            fontSize = 10.sp,
+                            color = tabTextColor,
+                            fontSize = 10.5.sp,
                             fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
                             letterSpacing = 0.5.sp
                         )
                     }
@@ -211,26 +221,8 @@ fun ProfilesScreen() {
                     context = context,
                     installedApps = installedApps,
                     filteredApps = filteredApps,
-                    allowedApps = allowedApps,
-                    isBypassMode = isBypassMode,
                     searchQuery = searchQuery,
-                    onSearchQueryChange = { searchQuery = it },
-                    onBypassModeChange = { bypass ->
-                        isBypassMode = bypass
-                        VpnManagerService.isBypassMode = bypass
-                        XrayProfilePersistence.saveBypassMode(context, bypass)
-                    },
-                    onAllowedAppToggle = { pkgName, checked ->
-                        val nextSet = allowedApps.toMutableSet()
-                        if (checked) {
-                            nextSet.add(pkgName)
-                        } else {
-                            nextSet.remove(pkgName)
-                        }
-                        allowedApps = nextSet
-                        VpnManagerService.allowedAppsList = nextSet.toList()
-                        XrayProfilePersistence.saveAllowedApps(context, nextSet.toList())
-                    }
+                    onSearchQueryChange = { searchQuery = it }
                 )
             }
             2 -> {

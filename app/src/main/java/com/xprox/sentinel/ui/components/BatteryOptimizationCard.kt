@@ -12,14 +12,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.xprox.sentinel.data.string
 import com.xprox.sentinel.theme.*
 
@@ -40,66 +40,59 @@ fun BatteryOptimizationCard(context: Context) {
         }
     }
 
-    Card(
-        colors = CardDefaults.cardColors(containerColor = DarkCard),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp)),
-        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(CardBorder))
-    ) {
+    SentinelSettingsCard {
+        Text(
+            text = string("battery_optimization_title"),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = ElectricViolet,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 1.sp
+        )
+        Text(
+            text = string("battery_optimization_desc"),
+            fontSize = 11.sp,
+            color = TextGray,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = string("battery_optimization_title"),
+                text = if (isIgnoring) {
+                    string("battery_optimization_whitelisted")
+                } else {
+                    string("battery_optimization_restricted")
+                },
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = TextWhite,
-                letterSpacing = 1.sp
-            )
-            Text(
-                text = string("battery_optimization_desc"),
-                fontSize = 10.sp,
-                color = TextGray,
-                modifier = Modifier.padding(bottom = 12.dp)
+                color = if (isIgnoring) SecureGreen else WarningAmber,
+                fontFamily = FontFamily.Monospace
             )
 
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = if (isIgnoring) {
-                        string("battery_optimization_whitelisted")
-                    } else {
-                        string("battery_optimization_restricted")
+            if (!isIgnoring) {
+                Button(
+                    onClick = {
+                        requestIgnoreBatteryOptimization(context)
                     },
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isIgnoring) CyberTeal else Color(0xFFFFB300)
-                )
-
-                if (!isIgnoring) {
-                    Button(
-                        onClick = {
-                            requestIgnoreBatteryOptimization(context)
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = CyberTeal.copy(alpha = 0.15f),
-                            contentColor = CyberTeal
-                        ),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                        modifier = Modifier
-                            .align(Alignment.End)
-                            .height(32.dp)
-                    ) {
-                        Text(
-                            text = string("btn_disable_optimization"),
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ElectricViolet,
+                        contentColor = TextWhite
+                    ),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .height(34.dp)
+                ) {
+                    Text(
+                        text = string("btn_disable_optimization"),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
                 }
             }
         }

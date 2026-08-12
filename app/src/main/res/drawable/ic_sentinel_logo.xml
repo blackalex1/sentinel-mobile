@@ -1,0 +1,62 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="256dp"
+    android:height="256dp"
+    android:viewportWidth="592"
+    android:viewportHeight="592">
+    
+    <!-- Outer Shield Frame with Cyber Purple Stroke -->
+    <path
+        android:pathData="M256,24 L440,96 L440,264 C440,380 256,480 256,480 C256,480 72,380 72,264 L72,96 Z"
+        android:strokeWidth="12"
+        android:strokeColor="#8B5CF6" />
+
+    <!-- Inner Carbon Shell -->
+    <path
+        android:pathData="M256,46 L420,112 L420,256 C420,360 256,452 256,452 C256,452 92,360 92,256 L92,112 Z"
+        android:fillColor="#0D0D15"
+        android:strokeWidth="3"
+        android:strokeColor="#8B5CF6" />
+
+    <!-- Side Wings -->
+    <path
+        android:pathData="M92,112 L170,160 L170,280 L120,310 L92,256 Z"
+        android:fillColor="#8B5CF6"
+        android:fillAlpha="0.35" />
+    <path
+        android:pathData="M420,112 L342,160 L342,280 L392,310 L420,256 Z"
+        android:fillColor="#06B6D4"
+        android:fillAlpha="0.35" />
+
+    <!-- Sentinel Phantom Mask -->
+    <path
+        android:pathData="M256,110 L348,160 L364,250 L330,325 L256,395 L182,325 L148,250 L164,160 Z"
+        android:fillColor="#131320"
+        android:strokeWidth="5"
+        android:strokeColor="#8B5CF6" />
+
+    <!-- Android Bugdroid Antenna Crest -->
+    <path
+        android:pathData="M226,80 L210,50 M286,80 L302,50"
+        android:strokeWidth="4"
+        android:strokeColor="#06B6D4"
+        android:strokeLineCap="round" />
+
+    <!-- Cyber Robotic Eyes Visor -->
+    <path
+        android:pathData="M178,212 L240,234 L234,254 L190,242 Z"
+        android:fillColor="#06B6D4" />
+    <path
+        android:pathData="M334,212 L272,234 L278,254 L322,242 Z"
+        android:fillColor="#06B6D4" />
+
+    <!-- Diamond Plasma Core -->
+    <path
+        android:pathData="M256,150 L290,210 L256,330 L222,210 Z"
+        android:fillColor="#8B5CF6" />
+    <path
+        android:pathData="M256,185 L278,225 L256,300 L234,225 Z"
+        android:fillColor="#38BDF8" />
+    <path
+        android:pathData="M256,205 L268,232 L256,268 L244,232 Z"
+        android:fillColor="#FFFFFF" />
+</vector>

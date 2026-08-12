@@ -34,9 +34,9 @@ object OutboundConfigBuilder {
         return buildString {
             append("{\n")
             append("  \"network\": \"${profile.network.ifEmpty { "tcp" }}\",\n")
-            append("  \"security\": \"${profile.security}\",\n")
+            append("  \"security\": \"${profile.security.ifEmpty { "none" }}\",\n")
             
-            // Security settings
+            // Security settings (REALITY / TLS / NONE)
             if (profile.security == "reality") {
                 append("  \"realitySettings\": {\n")
                 append("    \"show\": false,\n")
@@ -56,6 +56,9 @@ object OutboundConfigBuilder {
             } else if (profile.security == "tls") {
                 append("  \"tlsSettings\": {\n")
                 append("    \"serverName\": \"${profile.sni.ifEmpty { profile.address }}\"")
+                if (profile.fp.isNotEmpty()) {
+                    append(",\n    \"fingerprint\": \"${profile.fp}\"")
+                }
                 if (profile.allowInsecure) {
                     append(",\n    \"allowInsecure\": true")
                 }
@@ -63,10 +66,13 @@ object OutboundConfigBuilder {
                     val alpnList = profile.alpn.split(",").map { "\"${it.trim()}\"" }.joinToString(", ")
                     append(",\n    \"alpn\": [$alpnList]")
                 }
+                if (profile.pinnedPeerCertSha256.isNotEmpty()) {
+                    append(",\n    \"pinnedPeerCertSha256\": \"${profile.pinnedPeerCertSha256}\"")
+                }
                 append("\n  },\n")
             }
             
-            // Network transport settings
+            // Network transport settings (WS / gRPC / HTTPUpgrade / mKCP / TCP)
             val net = profile.network.lowercase()
             if (net == "ws") {
                 append("  \"wsSettings\": {\n")
@@ -79,7 +85,21 @@ object OutboundConfigBuilder {
                 append("\n  }\n")
             } else if (net == "grpc") {
                 append("  \"grpcSettings\": {\n")
-                append("    \"serviceName\": \"${profile.path}\"\n")
+                append("    \"serviceName\": \"${profile.path}\",\n")
+                append("    \"multiMode\": false\n")
+                append("  }\n")
+            } else if (net == "httpupgrade") {
+                append("  \"httpupgradeSettings\": {\n")
+                append("    \"path\": \"${profile.path}\"")
+                if (profile.host.isNotEmpty()) {
+                    append(",\n    \"host\": \"${profile.host}\"")
+                }
+                append("\n  }\n")
+            } else if (net == "kcp" || net == "mkcp") {
+                append("  \"kcpSettings\": {\n")
+                append("    \"header\": {\n")
+                append("      \"type\": \"${profile.headerType.ifEmpty { "none" }}\"\n")
+                append("    }\n")
                 append("  }\n")
             } else {
                 if (net == "tcp" && profile.headerType.isNotEmpty()) {
@@ -149,19 +169,22 @@ object OutboundConfigBuilder {
                 append("  \"servers\": [\n")
                 append("    {\n")
                 append("      \"address\": \"${profile.address}\",\n")
-                append("      \"port\": ${profile.port},\n")
+                append("      \"port\": ${profile.port}")
                 if (profile.uuid.isNotEmpty()) {
-                    append("      \"users\": [\n")
+                    append(",\n      \"users\": [\n")
                     append("        {\n")
                     append("          \"user\": \"${profile.uuid}\",\n")
                     append("          \"pass\": \"${profile.path}\"\n")
                     append("        }\n")
                     append("      ]\n")
                 } else {
-                    append("      \"users\": []\n")
+                    append("\n")
                 }
+                append("    }\n")
+                append("  ]\n")
                 append("}")
             } else {
+                // VLESS & VMess
                 append("{\n")
                 append("  \"vnext\": [\n")
                 append("    {\n")

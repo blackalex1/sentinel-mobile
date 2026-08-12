@@ -2,6 +2,7 @@ package com.xprox.sentinel.ui.components.sensitiveports
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -38,15 +39,15 @@ fun SensitivePortItem(
 
     // Smooth status transitions
     val animBgColor by animateColorAsState(
-        targetValue = if (isActive) portColor.copy(alpha = 0.06f) else DarkBg.copy(alpha = 0.5f),
+        targetValue = if (isActive) portColor.copy(alpha = 0.1f) else DarkCardElevated,
         animationSpec = tween(250)
     )
     val animBorderColor by animateColorAsState(
-        targetValue = if (isActive) portColor.copy(alpha = 0.5f) else CardBorder,
+        targetValue = if (isActive) portColor.copy(alpha = 0.6f) else CardBorder,
         animationSpec = tween(250)
     )
     val animStripeColor by animateColorAsState(
-        targetValue = if (isActive) portColor else CardBorder.copy(alpha = 0.2f),
+        targetValue = if (isActive) portColor else CardBorder.copy(alpha = 0.3f),
         animationSpec = tween(250)
     )
     val animPortColor by animateColorAsState(
@@ -54,7 +55,7 @@ fun SensitivePortItem(
         animationSpec = tween(250)
     )
     val animToggleBgColor by animateColorAsState(
-        targetValue = if (isActive) portColor.copy(alpha = 0.15f) else Color.Transparent,
+        targetValue = if (isActive) portColor.copy(alpha = 0.2f) else Color.Transparent,
         animationSpec = tween(250)
     )
 
@@ -110,25 +111,26 @@ fun SensitivePortItem(
                         color = animPortColor
                     )
                     
-                    // Category classification tag
-                    Text(
-                        text = portTag,
-                        fontSize = 7.5.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontFamily = FontFamily.Monospace,
-                        color = if (isActive) portColor else TextGray,
-                        modifier = Modifier
-                            .background(
-                                color = if (isActive) portColor.copy(alpha = 0.12f) else CardBorder.copy(alpha = 0.4f),
-                                shape = RoundedCornerShape(2.dp)
-                            )
-                            .padding(horizontal = 4.dp, vertical = 1.dp)
-                    )
+                    // High-contrast category classification tag
+                    Surface(
+                        color = portColor.copy(alpha = if (isActive) 0.25f else 0.15f),
+                        shape = RoundedCornerShape(4.dp),
+                        border = BorderStroke(0.5.dp, portColor.copy(alpha = if (isActive) 0.6f else 0.4f))
+                    ) {
+                        Text(
+                            text = portTag,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            color = if (isActive) portColor else TextWhite.copy(alpha = 0.9f),
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = serviceName,
-                    fontSize = 9.sp,
+                    fontSize = 9.5.sp,
                     color = if (isActive) TextWhite else TextGray,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -164,11 +166,11 @@ fun SensitivePortItem(
 }
 
 private fun getPortColor(port: Int, isCustom: Boolean = false): Color {
-    if (isCustom) return CyberTeal
+    if (isCustom) return CyberCyan
     return when (port) {
-        21, 23, 25, 80, 110, 143, 445, 3389 -> WarningRed
-        3306, 6379, 27017 -> CyberPurple
-        22, 53, 443 -> CyberTeal
+        21, 23, 25, 80, 110, 143, 445, 3389 -> WarningRose
+        3306, 6379, 27017 -> ElectricViolet
+        22, 53, 443 -> CyberCyan
         else -> CyberBlue
     }
 }

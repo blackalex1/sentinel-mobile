@@ -5,7 +5,9 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Refresh
@@ -14,22 +16,19 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.xprox.sentinel.service.XrayCoreDownloader
-import com.xprox.sentinel.service.XrayProcessManager
-import com.xprox.sentinel.service.VpnManagerService
-import com.xprox.sentinel.theme.*
 import com.xprox.sentinel.data.LanguageManager
 import com.xprox.sentinel.data.string
+import com.xprox.sentinel.service.VpnManagerService
+import com.xprox.sentinel.service.XrayCoreDownloader
+import com.xprox.sentinel.service.XrayProcessManager
+import com.xprox.sentinel.service.XrayReleaseInfo
+import com.xprox.sentinel.theme.*
 import com.xprox.sentinel.ui.components.coredownloader.*
 import kotlinx.coroutines.launch
-
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import com.xprox.sentinel.service.XrayReleaseInfo
 
 @Composable
 fun CoreDownloaderCard(
@@ -97,7 +96,8 @@ fun CoreDownloaderCard(
                     text = string("core_select_version_title"),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
-                    color = TextWhite
+                    color = TextWhite,
+                    fontFamily = FontFamily.Monospace
                 )
             },
             text = {
@@ -122,11 +122,11 @@ fun CoreDownloaderCard(
                                     showVersionDialog = false
                                 },
                                 colors = CardDefaults.cardColors(
-                                    containerColor = if (isSelected) CyberTeal.copy(alpha = 0.15f) else DarkBg
+                                    containerColor = if (isSelected) ElectricViolet.copy(alpha = 0.18f) else DarkCardElevated
                                 ),
                                 border = BorderStroke(
                                     1.dp,
-                                    if (isSelected) CyberTeal else CardBorder
+                                    if (isSelected) ElectricViolet else CardBorder
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -144,27 +144,30 @@ fun CoreDownloaderCard(
                                             text = release.tagName,
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = if (isSelected) CyberTeal else TextWhite
+                                            color = if (isSelected) ElectricViolet else TextWhite,
+                                            fontFamily = FontFamily.Monospace
                                         )
                                         if (release.publishedAt.isNotEmpty()) {
                                             Text(
                                                 text = release.publishedAt.take(10),
                                                 fontSize = 11.sp,
-                                                color = TextGray
+                                                color = TextGray,
+                                                fontFamily = FontFamily.Monospace
                                             )
                                         }
                                     }
                                     if (release.isPrerelease) {
                                         Surface(
-                                            color = WarningRed.copy(alpha = 0.2f),
+                                            color = WarningRose.copy(alpha = 0.2f),
                                             shape = RoundedCornerShape(4.dp),
-                                            border = BorderStroke(1.dp, WarningRed)
+                                            border = BorderStroke(1.dp, WarningRose)
                                         ) {
                                             Text(
                                                 text = string("core_prerelease_badge"),
                                                 fontSize = 9.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = WarningRed,
+                                                color = WarningRose,
+                                                fontFamily = FontFamily.Monospace,
                                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                             )
                                         }
@@ -179,6 +182,7 @@ fun CoreDownloaderCard(
                                                 fontSize = 9.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = SecureGreen,
+                                                fontFamily = FontFamily.Monospace,
                                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                             )
                                         }
@@ -191,10 +195,10 @@ fun CoreDownloaderCard(
             },
             confirmButton = {
                 TextButton(onClick = { showVersionDialog = false }) {
-                    Text(string("cancel"), color = CyberTeal)
+                    Text(string("cancel"), color = ElectricViolet, fontWeight = FontWeight.Bold)
                 }
             },
-            containerColor = DarkCard
+            containerColor = DarkCardElevated
         )
     }
 
@@ -208,21 +212,23 @@ fun CoreDownloaderCard(
                 Icon(
                     imageVector = if (isXrayInstalled) Icons.Default.CheckCircle else Icons.Default.Warning,
                     contentDescription = "Core Status",
-                    tint = if (isXrayInstalled) SecureGreen else WarningRed,
+                    tint = if (isXrayInstalled) SecureGreen else WarningRose,
                     modifier = Modifier.size(22.dp)
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
                     Text(
                         text = if (isXrayInstalled) string("core_installed") else string("core_not_installed"),
-                        fontSize = 14.sp,
+                        fontSize = 13.5.sp,
                         color = TextWhite,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
                     )
                     Text(
                         text = if (isXrayInstalled) "${string("core_version_label")}: $installedVersion" else string("core_requires_download"),
                         fontSize = 11.sp,
-                        color = TextGray
+                        color = TextGray,
+                        fontFamily = FontFamily.Monospace
                     )
                 }
             }
@@ -239,7 +245,7 @@ fun CoreDownloaderCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = string("core_allow_prerelease"),
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     color = TextWhite,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -258,10 +264,10 @@ fun CoreDownloaderCard(
                     triggerCheckUpdates(checked)
                 },
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = DarkBg,
-                    checkedTrackColor = CyberTeal,
+                    checkedThumbColor = ElectricViolet,
+                    checkedTrackColor = ElectricViolet.copy(alpha = 0.5f),
                     uncheckedThumbColor = TextGray,
-                    uncheckedTrackColor = DarkBg
+                    uncheckedTrackColor = CardBorder
                 )
             )
         }
@@ -317,55 +323,57 @@ fun CoreDownloaderCard(
                         }
                     }
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = DarkBg),
-                modifier = Modifier.fillMaxWidth().height(38.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = DarkCardElevated),
+                modifier = Modifier.fillMaxWidth().height(40.dp),
                 border = BorderStroke(1.dp, CardBorder),
-                shape = RoundedCornerShape(8.dp)
+                shape = RoundedCornerShape(10.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Refresh, 
                     contentDescription = "Update Databases", 
-                    tint = CyberTeal,
+                    tint = CyberCyan,
                     modifier = Modifier.size(15.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = string("core_update_dbs"), 
-                    color = CyberTeal, 
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold
+                    color = CyberCyan, 
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
                 )
             }
         }
 
-            if (!isXrayInstalled && !isDownloading) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Button(
-                    onClick = {
-                        isDownloading = true
-                        downloadStatusText = LanguageManager.getString("core_status_downloading")
-                        coroutineScope.launch {
-                            val targetVer = latestVersion ?: XrayCoreDownloader.fetchLatestVersion(allowPrerelease) ?: "v26.3.27"
-                            val success = XrayCoreDownloader.downloadAndInstall(context, targetVer) { progress ->
-                                downloadProgress = progress
-                            }
-                            isDownloading = false
-                            isXrayInstalled = success
-                            if (success) {
-                                installedVersion = targetVer
-                                Toast.makeText(context, "Xray-core successfully installed!", Toast.LENGTH_SHORT).show()
-                            } else {
-                                Toast.makeText(context, "Download failed. Please check your internet connection.", Toast.LENGTH_LONG).show()
-                            }
+        if (!isXrayInstalled && !isDownloading) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = {
+                    isDownloading = true
+                    downloadStatusText = LanguageManager.getString("core_status_downloading")
+                    coroutineScope.launch {
+                        val targetVer = latestVersion ?: XrayCoreDownloader.fetchLatestVersion(allowPrerelease) ?: "v26.3.27"
+                        val success = XrayCoreDownloader.downloadAndInstall(context, targetVer) { progress ->
+                            downloadProgress = progress
                         }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = CyberTeal),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(imageVector = Icons.Default.Refresh, contentDescription = "Download", tint = DarkBg)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = string("core_download_official"), color = DarkBg, fontWeight = FontWeight.Bold)
-                }
+                        isDownloading = false
+                        isXrayInstalled = success
+                        if (success) {
+                            installedVersion = targetVer
+                            Toast.makeText(context, "Xray-core successfully installed!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "Download failed. Please check your internet connection.", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth().height(44.dp)
+            ) {
+                Icon(imageVector = Icons.Default.Refresh, contentDescription = "Download", tint = TextWhite)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = string("core_download_official"), color = TextWhite, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
             }
         }
     }
+}

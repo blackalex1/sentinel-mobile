@@ -88,47 +88,61 @@ fun ServerProfileDialog(
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
                 )
+                
+                // Complete 7-Protocol Selector Matrix (VLESS, VMESS, TROJAN, SHADOWSOCKS, HYSTERIA2, SOCKS, DIRECT)
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    val row1 = listOf("VLESS", "VMESS", "SHADOWSOCKS")
-                    val row2 = listOf("TROJAN", "SOCKS", "DIRECT")
+                    val row1 = listOf("VLESS", "VMESS", "TROJAN", "SHADOWSOCKS")
+                    val row2 = listOf("HYSTERIA2", "SOCKS", "DIRECT")
                     
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         row1.forEach { proto ->
                             val selected = type.uppercase() == proto
                             Button(
-                                onClick = { type = proto },
+                                onClick = {
+                                    type = proto
+                                    if (proto == "HYSTERIA2") {
+                                        security = "tls"
+                                        network = "hysteria"
+                                    }
+                                },
                                 modifier = Modifier.weight(1f),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = if (selected) CyberTeal else DarkCard,
                                     contentColor = if (selected) DarkBg else TextWhite
                                 ),
                                 border = BorderStroke(1.dp, if (selected) CyberTeal else CardBorder),
-                                contentPadding = PaddingValues(vertical = 8.dp)
+                                contentPadding = PaddingValues(vertical = 6.dp)
                             ) {
-                                Text(proto, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text(proto, fontSize = 9.5.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         row2.forEach { proto ->
                             val selected = type.uppercase() == proto
                             Button(
-                                onClick = { type = proto },
+                                onClick = {
+                                    type = proto
+                                    if (proto == "HYSTERIA2") {
+                                        security = "tls"
+                                        network = "hysteria"
+                                    }
+                                },
                                 modifier = Modifier.weight(1f),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = if (selected) CyberTeal else DarkCard,
                                     contentColor = if (selected) DarkBg else TextWhite
                                 ),
                                 border = BorderStroke(1.dp, if (selected) CyberTeal else CardBorder),
-                                contentPadding = PaddingValues(vertical = 8.dp)
+                                contentPadding = PaddingValues(vertical = 6.dp)
                             ) {
-                                Text(proto, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text(proto, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -162,7 +176,7 @@ fun ServerProfileDialog(
                     OutlinedTextField(
                         value = uuid,
                         onValueChange = { uuid = it },
-                        label = { Text(string("vless_uuid"), color = TextGray) },
+                        label = { Text(if (type.uppercase() == "HYSTERIA2") "Пароль / Auth Token" else string("vless_uuid"), color = TextGray) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = CyberTeal,
                             unfocusedBorderColor = CardBorder,

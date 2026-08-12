@@ -109,6 +109,7 @@ class VpnManagerService : VpnService() {
     private var resolvedServerIp: String? = null
     private var captureProxyServer: CaptureProxyServer? = null
     private var activeCapturePort: Int = 0
+    private var sentinelPairingServer: SentinelPairingServer? = null
 
     // WakeLock keeps CPU active during VPN session to prevent Doze from killing Xray
     private var wakeLock: PowerManager.WakeLock? = null
@@ -141,16 +142,22 @@ class VpnManagerService : VpnService() {
         }
         
         if (intent?.action == ACTION_RESTART_PROCESS) {
-            Log.i(TAG, "Restart process action received. Relaunching native core.")
+            val portFailed = intent.getBooleanExtra("EXTRA_PORT_BIND_FAILED", false)
+            Log.i(TAG, "Restart process action received (portFailed=$portFailed). Relaunching native core.")
             if (_isRunningFlow.value) {
-                val configFile = File(filesDir, "secure_xray_config.json")
-                val restarted = com.xprox.sentinel.service.vpn.VpnProcessSupervisor.startOrRestartCoreProcess(
-                    context = this,
-                    configFile = configFile,
-                    activeRawFd = activeRawFd
-                )
-                if (!restarted) {
-                    reloadVpnConfig()
+                if (portFailed) {
+                    Log.w(TAG, "Port bind failure detected! Regenerating local proxy credentials with a new open port.")
+                    reloadVpnConfig(forceNewPort = true)
+                } else {
+                    val configFile = File(filesDir, "secure_xray_config.json")
+                    val restarted = com.xprox.sentinel.service.vpn.VpnProcessSupervisor.startOrRestartCoreProcess(
+                        context = this,
+                        configFile = configFile,
+                        activeRawFd = activeRawFd
+                    )
+                    if (!restarted) {
+                        reloadVpnConfig()
+                    }
                 }
             }
             return START_STICKY
@@ -293,6 +300,18 @@ class VpnManagerService : VpnService() {
                 targetSocksUsername = creds.username,
                 targetSocksToken = creds.token
             ).apply { start() }
+
+            // Initialize Sentinel Pairing Server for Zero-Touch PC PIN Pairing
+            if (XrayProfilePersistence.loadLanSharing(this)) {
+                sentinelPairingServer = SentinelPairingServer(this, 18080).apply {
+                    start(
+                        socksPort = lanSocksPort,
+                        httpPort = lanHttpPort,
+                        username = lanCreds?.username,
+                        token = lanCreds?.token
+                    )
+                }
+            }
 
             // 2. Generate/Compile client configuration file
             val configFile = XrayConfigManager.compileSecureConfig(
@@ -495,7 +514,7 @@ class VpnManagerService : VpnService() {
         }
     }
 
-    private fun reloadVpnConfig() {
+    private fun reloadVpnConfig(forceNewPort: Boolean = false) {
         if (!_isRunningFlow.value) return
         try {
             Log.i(TAG, "Reloading VPN and Xray config dynamically for profile: ${selectedProfile.name} (${selectedProfile.id})...")
@@ -514,13 +533,32 @@ class VpnManagerService : VpnService() {
 
             // 1. Re-compile secure configuration file
             val isLocalProxyRandomize = XrayProfilePersistence.loadLocalProxyRandomize(this)
-            val creds = _activeCredentials.value ?: if (isLocalProxyRandomize) {
-                XrayConfigManager.generateSecureCredentials()
+            val currentPort = _activeCredentials.value?.port ?: 0
+            val creds = if (forceNewPort || _activeCredentials.value == null) {
+                val newCreds = if (isLocalProxyRandomize) {
+                    XrayConfigManager.generateSecureCredentials(excludePorts = if (currentPort > 0) setOf(currentPort) else emptySet())
+                } else {
+                    val user = XrayProfilePersistence.loadLocalProxyUsername(this)
+                    val pass = XrayProfilePersistence.loadLocalProxyPassword(this)
+                    val newPort = XrayConfigManager.findRandomOpenPort(excludePorts = if (currentPort > 0) setOf(currentPort) else emptySet())
+                    XrayConfigManager.LocalProxyCredentials(port = newPort, username = user, token = pass)
+                }
+                _activeCredentials.value = newCreds
+                _activePortFlow.value = newCreds.port
+                
+                // Re-register Authenticator for the new port
+                java.net.Authenticator.setDefault(object : java.net.Authenticator() {
+                    override fun getPasswordAuthentication(): java.net.PasswordAuthentication {
+                        if (requestingHost == "127.0.0.1" && requestingPort == newCreds.port) {
+                            return java.net.PasswordAuthentication(newCreds.username, newCreds.token.toCharArray())
+                        }
+                        return super.getPasswordAuthentication()
+                    }
+                })
+                
+                newCreds
             } else {
-                val user = XrayProfilePersistence.loadLocalProxyUsername(this)
-                val pass = XrayProfilePersistence.loadLocalProxyPassword(this)
-                val port = XrayProfilePersistence.loadLocalProxyPort(this)
-                XrayConfigManager.LocalProxyCredentials(port = port, username = user, token = pass)
+                _activeCredentials.value!!
             }
             
             val tetherIps = getActiveTetheringIps()
@@ -617,6 +655,8 @@ class VpnManagerService : VpnService() {
         captureProxyServer?.stop()
         captureProxyServer = null
         activeCapturePort = 0
+        sentinelPairingServer?.stop()
+        sentinelPairingServer = null
 
         XrayProcessManager.stopProcess() // Terminate Xray core subprocess
         

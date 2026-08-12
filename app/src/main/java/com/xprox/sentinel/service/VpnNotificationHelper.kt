@@ -12,7 +12,7 @@ import com.xprox.sentinel.MainActivity
 import com.xprox.sentinel.data.LanguageManager
 
 object VpnNotificationHelper {
-    const val CHANNEL_ID = "vpn_service_channel_v3"
+    const val CHANNEL_ID = "vpn_service_channel_v4"
     const val NOTIFICATION_ID = 8876
 
     fun createNotificationChannel(context: Context) {
@@ -23,6 +23,7 @@ object VpnNotificationHelper {
             try {
                 manager.deleteNotificationChannel("vpn_service_channel")
                 manager.deleteNotificationChannel("vpn_service_channel_v2")
+                manager.deleteNotificationChannel("vpn_service_channel_v3")
             } catch (e: Exception) {
                 // Ignore
             }
@@ -82,6 +83,7 @@ object VpnNotificationHelper {
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setSilent(true)
+            .setColor(0xFF8B5CF6.toInt())
 
         val notificationTitle = if (profileName.isNotEmpty() && profileAddress.isNotEmpty()) {
             profileName

@@ -6,10 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,36 +24,38 @@ import com.xprox.sentinel.theme.*
 @Composable
 fun AboutAppCard() {
     val context = LocalContext.current
-    val authorUrl = "https://github.com/blackalex1"
+    val repoUrl = "https://github.com/blackalex1/sentinel-mobile"
 
-    Card(
-        colors = CardDefaults.cardColors(containerColor = DarkCard),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth()
+    DoppelrandCard(
+        modifier = Modifier.fillMaxWidth(),
+        borderColor = ElectricViolet.copy(alpha = 0.35f),
+        contentPadding = PaddingValues(16.dp)
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = Icons.Default.Info,
                 contentDescription = "Info",
-                tint = CyberTeal,
+                tint = ElectricViolet,
                 modifier = Modifier.size(24.dp)
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column {
                 Text(
-                    text = "Sentinel Client v1.0.0",
+                    text = "Sentinel Mobile v1.1.0",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
-                    color = TextWhite
+                    color = TextWhite,
+                    fontFamily = FontFamily.Monospace
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "Loopback Hardened Core • API 29+",
                     fontSize = 11.sp,
-                    color = TextGray
+                    color = TextGray,
+                    fontFamily = FontFamily.Monospace
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(
@@ -64,7 +63,7 @@ fun AboutAppCard() {
                     modifier = Modifier
                         .clip(RoundedCornerShape(4.dp))
                         .clickable {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(authorUrl))
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(repoUrl))
                             context.startActivity(intent)
                         }
                 ) {
@@ -75,9 +74,10 @@ fun AboutAppCard() {
                     )
                     Text(
                         text = "blackalex1",
-                        fontSize = 11.sp,
+                        fontSize = 11.5.sp,
                         fontWeight = FontWeight.Bold,
-                        color = CyberTeal,
+                        color = CyberCyan,
+                        fontFamily = FontFamily.Monospace,
                         textDecoration = TextDecoration.Underline
                     )
                 }

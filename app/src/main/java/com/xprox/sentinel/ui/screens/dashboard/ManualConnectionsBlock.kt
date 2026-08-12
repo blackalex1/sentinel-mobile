@@ -6,12 +6,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xprox.sentinel.config.XrayConfigManager
-import com.xprox.sentinel.ui.components.ServerProfileCard
 import com.xprox.sentinel.theme.*
+import com.xprox.sentinel.ui.components.ServerProfileCard
 
 @Composable
 fun ManualConnectionsBlock(
@@ -38,14 +39,17 @@ fun ManualConnectionsBlock(
                 text = if (isRu) "ИНДИВИДУАЛЬНЫЕ ПОДКЛЮЧЕНИЯ" else "MANUAL CONNECTIONS",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = TextGray,
+                color = ElectricViolet,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 1.sp,
                 modifier = Modifier.padding(bottom = 2.dp)
             )
             Text(
                 text = if (isRu) "[ТЕСТ ПИНГА]" else "[TEST PINGS]",
-                fontSize = 10.sp,
+                fontSize = 10.5.sp,
                 fontWeight = FontWeight.Bold,
-                color = CyberTeal,
+                color = CyberCyan,
+                fontFamily = FontFamily.Monospace,
                 modifier = Modifier
                     .clickable { onPingAll() }
                     .padding(horizontal = 4.dp, vertical = 2.dp)

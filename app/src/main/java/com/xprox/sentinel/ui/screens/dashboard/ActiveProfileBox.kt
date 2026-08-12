@@ -1,6 +1,5 @@
 package com.xprox.sentinel.ui.screens.dashboard
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -18,8 +17,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xprox.sentinel.config.XrayConfigManager
 import com.xprox.sentinel.config.XrayProfilePersistence
+import com.xprox.sentinel.data.LanguageManager
 import com.xprox.sentinel.data.string
 import com.xprox.sentinel.theme.*
+import com.xprox.sentinel.ui.components.DoppelrandCard
 
 @Composable
 fun ActiveProfileBox(
@@ -32,50 +33,54 @@ fun ActiveProfileBox(
     val isDirect = activeProfile.type.uppercase() == "DIRECT"
 
     if (!isDirect && (activeProfile.address.isEmpty() || activeProfile.uuid.isEmpty())) {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = WarningRed.copy(alpha = 0.1f)),
+        DoppelrandCard(
             modifier = modifier.fillMaxWidth(),
-            border = BorderStroke(1.dp, WarningRed.copy(alpha = 0.3f))
+            borderColor = WarningRose.copy(alpha = 0.5f),
+            contentPadding = PaddingValues(12.dp)
         ) {
             Row(
-                modifier = Modifier.padding(12.dp),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(imageVector = Icons.Default.Info, contentDescription = "Warning", tint = WarningRed)
+                Icon(imageVector = Icons.Default.Info, contentDescription = "Warning", tint = WarningRose)
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     text = string("no_profile_warning"),
                     fontSize = 11.sp,
-                    color = WarningRed,
+                    color = WarningRose,
                     fontWeight = FontWeight.SemiBold
                 )
             }
         }
     } else {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = CyberTeal.copy(alpha = 0.05f)),
+        DoppelrandCard(
             modifier = modifier.fillMaxWidth(),
-            border = BorderStroke(1.dp, CyberTeal.copy(alpha = 0.2f))
+            borderColor = if (isRunning) SecureGreen.copy(alpha = 0.4f) else ElectricViolet.copy(alpha = 0.35f),
+            contentPadding = PaddingValues(14.dp)
         ) {
-            Column(modifier = Modifier.padding(12.dp)) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.CheckCircle, contentDescription = "Active Profile", tint = CyberTeal)
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Active Profile",
+                            tint = if (isRunning) SecureGreen else ElectricViolet
+                        )
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
                                 text = "${string("active_profile")}: ${activeProfile.name}",
-                                fontSize = 12.sp,
+                                fontSize = 12.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = TextWhite
                             )
                             Text(
                                 text = if (isDirect) {
-                                    if (com.xprox.sentinel.data.LanguageManager.currentLanguage.value.code == "ru") "DIRECT • Режим анализа трафика" else "DIRECT • Traffic Analysis Mode"
+                                    if (LanguageManager.currentLanguage.value.code == "ru") "DIRECT • Режим анализа трафика" else "DIRECT • Traffic Analysis Mode"
                                 } else {
                                     "${activeProfile.type} • ${activeProfile.address}"
                                 },
@@ -92,23 +97,23 @@ fun ActiveProfileBox(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(WarningYellow.copy(alpha = 0.08f), RoundedCornerShape(4.dp))
-                                .border(1.dp, WarningYellow.copy(alpha = 0.25f), RoundedCornerShape(4.dp))
-                                .padding(8.dp)
+                                .background(WarningAmber.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
+                                .border(1.dp, WarningAmber.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
+                                .padding(10.dp)
                         ) {
                             Column {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
                                         imageVector = Icons.Default.Info,
                                         contentDescription = "Warning",
-                                        tint = WarningYellow,
+                                        tint = WarningAmber,
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = string("analytics_collection_warning"),
                                         fontSize = 10.sp,
-                                        color = WarningYellow,
+                                        color = WarningAmber,
                                         fontWeight = FontWeight.Medium,
                                         modifier = Modifier.weight(1f)
                                     )
@@ -119,15 +124,15 @@ fun ActiveProfileBox(
                                         XrayProfilePersistence.saveAnalyticsConfirmed(context, true)
                                         isConfirmed = true
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = WarningYellow),
+                                    colors = ButtonDefaults.buttonColors(containerColor = WarningAmber),
                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                                    shape = RoundedCornerShape(4.dp),
-                                    modifier = Modifier.align(Alignment.End).height(24.dp)
+                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier.align(Alignment.End).height(26.dp)
                                 ) {
                                     Text(
                                         text = string("analytics_confirm_btn"),
-                                        color = DarkBg,
-                                        fontSize = 9.sp,
+                                        color = VoidBg,
+                                        fontSize = 9.5.sp,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
@@ -137,22 +142,22 @@ fun ActiveProfileBox(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(CyberTeal.copy(alpha = 0.08f), RoundedCornerShape(4.dp))
-                                .border(1.dp, CyberTeal.copy(alpha = 0.25f), RoundedCornerShape(4.dp))
-                                .padding(8.dp)
+                                .background(SecureGreen.copy(alpha = 0.10f), RoundedCornerShape(8.dp))
+                                .border(1.dp, SecureGreen.copy(alpha = 0.30f), RoundedCornerShape(8.dp))
+                                .padding(10.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Default.CheckCircle,
                                     contentDescription = "Confirmed",
-                                    tint = CyberTeal,
+                                    tint = SecureGreen,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = string("analytics_collection_approved"),
                                     fontSize = 10.sp,
-                                    color = CyberTeal,
+                                    color = SecureGreen,
                                     fontWeight = FontWeight.Medium
                                 )
                             }

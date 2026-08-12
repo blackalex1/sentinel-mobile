@@ -136,4 +136,17 @@ class SentinelSecurityTest {
         // Clean up mock threat states
         blockedDestinations.clear()
     }
+
+    @Test
+    fun testPortExclusionAndRandomPortGeneration() {
+        val testExcludedPort = 36425
+        val port = XrayConfigManager.findRandomOpenPort(excludePorts = setOf(testExcludedPort))
+        assertTrue("findRandomOpenPort must return a valid port > 0", port > 0)
+        assertTrue("findRandomOpenPort must never return an excluded port!", port != testExcludedPort)
+
+        val creds = XrayConfigManager.generateSecureCredentials(excludePorts = setOf(testExcludedPort))
+        assertTrue("generateSecureCredentials must produce a non-excluded port", creds.port != testExcludedPort)
+        assertTrue("Generated username must not be empty", creds.username.isNotEmpty())
+        assertTrue("Generated token must not be empty", creds.token.isNotEmpty())
+    }
 }

@@ -1,6 +1,7 @@
 package com.xprox.sentinel.ui.components
 
 import android.content.Context
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -11,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,12 +29,13 @@ fun LanguageSelectorCard(context: Context) {
             text = string("lang_card_title"),
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
-            color = TextWhite,
+            color = ElectricViolet,
+            fontFamily = FontFamily.Monospace,
             letterSpacing = 1.sp
         )
         Text(
             text = string("lang_card_desc"),
-            fontSize = 10.sp,
+            fontSize = 11.sp,
             color = TextGray,
             modifier = Modifier.padding(bottom = 12.dp)
         )
@@ -41,18 +44,24 @@ fun LanguageSelectorCard(context: Context) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(DarkBg)
+                .clip(RoundedCornerShape(12.dp))
+                .background(DarkCardElevated)
                 .padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             LanguageManager.Language.values().forEach { lang ->
                 val isSelected = currentLang == lang
+
+                val itemBg by animateColorAsState(
+                    targetValue = if (isSelected) ElectricViolet else Color.Transparent,
+                    label = "itemBg"
+                )
+
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(if (isSelected) CyberTeal.copy(alpha = 0.15f) else DarkCard)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(itemBg)
                         .clickable {
                             LanguageManager.setLanguage(context, lang)
                         }
@@ -61,9 +70,10 @@ fun LanguageSelectorCard(context: Context) {
                 ) {
                     Text(
                         text = lang.displayName,
-                        color = if (isSelected) CyberTeal else TextWhite,
+                        color = if (isSelected) TextWhite else TextGray,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
+                        fontSize = 12.5.sp,
+                        fontFamily = FontFamily.Monospace
                     )
                 }
             }

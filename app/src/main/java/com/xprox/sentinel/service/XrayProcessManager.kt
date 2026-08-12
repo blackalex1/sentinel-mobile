@@ -20,12 +20,35 @@ object XrayProcessManager {
     
     private var xrayProcess: Process? = null
 
+    @Volatile
+    var lastPortBindFailed: Boolean = false
+        private set
+
+    private var consecutiveFailures: Int = 0
+    private var lastStartTime: Long = 0L
+    private const val MAX_CONSECUTIVE_RESTARTS = 5
+
     private val _xrayLogFlow = MutableSharedFlow<String>(
         replay = 100,
         extraBufferCapacity = 100,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
     val xrayLogFlow: SharedFlow<String> = _xrayLogFlow.asSharedFlow()
+
+    /**
+     * Terminate any lingering native xray binary subprocesses under our app's UID.
+     */
+    fun killExistingXrayProcesses() {
+        try {
+            Runtime.getRuntime().exec(arrayOf("pkill", "-9", "xray")).waitFor()
+            Log.i(TAG, "Executed pkill -9 xray to clean up lingering processes")
+        } catch (e: Exception) {
+            // Ignore if pkill tool is missing or unexecutable
+        }
+        try {
+            Thread.sleep(100)
+        } catch (e: Exception) {}
+    }
 
     /**
      * Safe execution checker. Checks for both the native binary and the required GeoIP/GeoSite routing databases.
@@ -43,9 +66,14 @@ object XrayProcessManager {
      */
     @Synchronized
     fun startProcess(context: Context, configFilePath: String, tunFd: Int? = null): Boolean {
+        killExistingXrayProcesses()
         if (xrayProcess != null) {
             stopProcess()
         }
+
+        lastPortBindFailed = false
+        val startTime = System.currentTimeMillis()
+        lastStartTime = startTime
 
         val binDir = File(context.filesDir, "bin")
         val xrayFile = File(binDir, BINARY_NAME)
@@ -110,6 +138,10 @@ object XrayProcessManager {
                     val reader = p?.inputStream?.bufferedReader()
                     reader?.forEachLine { line ->
                         Log.d("XrayCoreProcess", line)
+                        if (line.contains("bind: address already in use") || line.contains("failed to listen TCP")) {
+                            Log.w(TAG, "Detected Xray port binding failure in log output: $line")
+                            lastPortBindFailed = true
+                        }
                         // Stream connection events reactively from Xray logs to the connection audit logger
                         ConnectionAuditParser.parseAndLog(context, line)
                         
@@ -124,20 +156,38 @@ object XrayProcessManager {
                         _xrayLogFlow.tryEmit(line)
                     }
                     val exitVal = p?.waitFor()
-                    Log.i(TAG, "Xray process exited with code $exitVal")
+                    val runDuration = System.currentTimeMillis() - startTime
+                    Log.i(TAG, "Xray process exited with code $exitVal (duration: ${runDuration}ms)")
                     
                     synchronized(XrayProcessManager) {
                         if (xrayProcess != null && xrayProcess == p) {
                             xrayProcess = null
-                            Log.w(TAG, "Xray process terminated unexpectedly! Sending restart intent to VpnManagerService.")
+                            
+                            if (runDuration > 5000L) {
+                                consecutiveFailures = 0
+                            } else {
+                                consecutiveFailures++
+                            }
+
+                            if (consecutiveFailures > MAX_CONSECUTIVE_RESTARTS) {
+                                Log.e(TAG, "Xray process failed $consecutiveFailures times consecutively (<5s runtime). Halting restart loop!")
+                                return@synchronized
+                            }
+
+                            val backoffDelay = (consecutiveFailures * 1000L).coerceAtLeast(300L)
+                            Log.w(TAG, "Xray process terminated unexpectedly! Consecutive failures: $consecutiveFailures. Scheduling restart in ${backoffDelay}ms.")
                             val intent = Intent(context, VpnManagerService::class.java).apply {
                                 action = VpnManagerService.ACTION_RESTART_PROCESS
+                                putExtra("EXTRA_PORT_BIND_FAILED", lastPortBindFailed)
                             }
-                            try {
-                                context.startService(intent)
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Failed to send restart intent to VpnManagerService", e)
-                            }
+                            Thread {
+                                try {
+                                    Thread.sleep(backoffDelay)
+                                    context.startService(intent)
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Failed to send restart intent to VpnManagerService", e)
+                                }
+                            }.start()
                         }
                     }
                 } catch (e: Exception) {
@@ -162,6 +212,7 @@ object XrayProcessManager {
      */
     @Synchronized
     fun stopProcess() {
+        consecutiveFailures = 0
         xrayProcess?.let {
             Log.i(TAG, "Terminating running Xray native subprocess")
             it.destroy()
@@ -186,6 +237,7 @@ object XrayProcessManager {
                 Thread.sleep(200)
             } catch (e: Exception) {}
         }
+        killExistingXrayProcesses()
 
         // Restore parent stdin (FD 0) to release reference to the TUN interface
         try {

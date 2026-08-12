@@ -9,6 +9,7 @@ import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -116,8 +117,8 @@ fun DashboardRadarButton(
 
     val glowBreathe by if (isRunning) {
         infiniteTransition.animateFloat(
-            initialValue = 0.3f,
-            targetValue = 0.7f,
+            initialValue = 0.35f,
+            targetValue = 0.75f,
             animationSpec = infiniteRepeatable(
                 animation = tween(1800, easing = LinearEasing),
                 repeatMode = RepeatMode.Reverse
@@ -145,12 +146,12 @@ fun DashboardRadarButton(
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1.0f,
+        targetValue = if (isPressed) 0.94f else 1.0f,
         animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
         label = "scale"
     )
 
-    val activeGlowColor = if (isRunning) SecureGreen else CyberTeal
+    val activeGlowColor = if (isRunning) SecureGreen else ElectricViolet
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -170,8 +171,8 @@ fun DashboardRadarButton(
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                activeGlowColor.copy(alpha = 0.35f * glowBreathe),
-                                activeGlowColor.copy(alpha = 0.1f * glowBreathe),
+                                SecureGreen.copy(alpha = 0.35f * glowBreathe),
+                                CyberCyan.copy(alpha = 0.12f * glowBreathe),
                                 Color.Transparent
                             )
                         ),
@@ -188,7 +189,7 @@ fun DashboardRadarButton(
                         .graphicsLayer(scaleX = scale, scaleY = scale)
                 ) {
                     drawCircle(
-                        color = activeGlowColor,
+                        color = SecureGreen,
                         radius = (size.minDimension / 2) * pulseRadius,
                         style = Stroke(width = 2.dp.toPx()),
                         alpha = pulseAlpha
@@ -211,9 +212,9 @@ fun DashboardRadarButton(
                     width = 2.dp,
                     brush = Brush.sweepGradient(
                         if (isRunning) {
-                            listOf(SecureGreen, CyberTeal, SecureGreen)
+                            listOf(SecureGreen, CyberCyan, SecureGreen)
                         } else {
-                            listOf(CyberTeal, CyberPurple, CyberTeal)
+                            listOf(ElectricViolet, CyberCyan, ElectricViolet)
                         }
                     )
                 )
@@ -230,7 +231,7 @@ fun DashboardRadarButton(
                     )
             ) {
                 drawCircle(
-                    color = if (isRunning) SecureGreen.copy(alpha = 0.3f) else CyberTeal.copy(alpha = 0.25f),
+                    color = if (isRunning) SecureGreen.copy(alpha = 0.35f) else ElectricViolet.copy(alpha = 0.25f),
                     style = Stroke(
                         width = 1.5.dp.toPx(),
                         pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 16f), 0f)
@@ -247,10 +248,10 @@ fun DashboardRadarButton(
                         scaleY = scale
                     )
                     .shadow(
-                        elevation = if (isPressed) 4.dp else 20.dp,
+                        elevation = if (isPressed) 4.dp else 24.dp,
                         shape = CircleShape,
-                        ambientColor = if (isRunning) SecureGreen else CyberTeal,
-                        spotColor = if (isRunning) SecureGreen else CyberTeal
+                        ambientColor = if (isRunning) SecureGreen else ElectricViolet,
+                        spotColor = if (isRunning) SecureGreen else ElectricViolet
                     )
                     .clickable(
                         interactionSource = interactionSource,
@@ -261,64 +262,70 @@ fun DashboardRadarButton(
                         }
                     ),
                 shape = CircleShape,
-                color = DarkCard,
+                color = Color.Transparent,
                 border = BorderStroke(
                     1.5.dp,
-                    if (isRunning) SecureGreen.copy(alpha = 0.8f) else CardBorder
+                    if (isRunning) SecureGreen.copy(alpha = 0.85f) else CardBorder
                 )
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxSize()
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            brush = if (isRunning) {
+                                Brush.linearGradient(listOf(Color(0xFF059669), Color(0xFF0F766E)))
+                            } else {
+                                Brush.linearGradient(listOf(Color(0xFF12121E), Color(0xFF0C0C14)))
+                            }
+                        )
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = "Protection Lock Core",
-                        tint = if (isRunning) SecureGreen else WarningRed,
-                        modifier = Modifier.size(34.dp)
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = if (isRunning) string("shield_active") else string("disconnected"),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isRunning) SecureGreen else WarningRed,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp),
-                        maxLines = 1
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Protection Lock Core",
+                            tint = if (isRunning) TextWhite else ElectricViolet,
+                            modifier = Modifier.size(34.dp)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = if (isRunning) string("shield_active") else string("disconnected"),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isRunning) TextWhite else TextSecondary,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp),
+                            maxLines = 1
+                        )
+                    }
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // High-End Single Glass Telemetry Surface Pill
-        Surface(
-            color = DarkCard.copy(alpha = 0.85f),
-            shape = RoundedCornerShape(20.dp),
-            border = BorderStroke(
-                1.dp,
-                if (isRunning) SecureGreen.copy(alpha = 0.35f) else CardBorder.copy(alpha = 0.6f)
-            ),
-            modifier = if (hasProfile && onPingClick != null) {
-                Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .clickable { 
-                        triggerHapticFeedback()
-                        onPingClick() 
-                    }
-            } else {
-                Modifier
-            }
+        // High-End Doppelrand Glass Telemetry Surface Pill
+        DoppelrandCard(
+            shellPadding = 3.dp,
+            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
+            borderColor = if (isRunning) SecureGreen.copy(alpha = 0.4f) else DoppelrandShellBorder,
+            onClick = if (hasProfile && onPingClick != null) {
+                {
+                    triggerHapticFeedback()
+                    onPingClick()
+                }
+            } else null
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+                modifier = Modifier.fillMaxWidth()
             ) {
                 // Public IP Address Row
                 Row(
@@ -326,7 +333,7 @@ fun DashboardRadarButton(
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Canvas(modifier = Modifier.size(6.dp)) {
-                        drawCircle(color = if (publicIp != null) SecureGreen else WarningRed)
+                        drawCircle(color = if (publicIp != null) SecureGreen else WarningRose)
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
@@ -354,7 +361,7 @@ fun DashboardRadarButton(
                 }
 
                 val telemetryColor = if (pingMs != null) {
-                    if (pingMs < 150) SecureGreen else if (pingMs < 300) CyberTeal else WarningRed
+                    if (pingMs < 150) SecureGreen else if (pingMs < 300) CyberCyan else WarningRose
                 } else {
                     TextGray
                 }

@@ -2,12 +2,11 @@ package com.xprox.sentinel.ui.components
 
 import android.content.Context
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -30,12 +29,13 @@ fun KillSwitchCard(context: Context) {
                     text = string("kill_switch_title"),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = TextWhite,
+                    color = ElectricViolet,
+                    fontFamily = FontFamily.Monospace,
                     letterSpacing = 1.sp
                 )
                 Text(
                     text = string("kill_switch_desc"),
-                    fontSize = 10.sp,
+                    fontSize = 11.sp,
                     color = TextGray,
                     modifier = Modifier.padding(top = 4.dp, end = 8.dp)
                 )
@@ -48,8 +48,8 @@ fun KillSwitchCard(context: Context) {
                     XrayProfilePersistence.saveKillSwitch(context, checked)
                 },
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = CyberTeal,
-                    checkedTrackColor = CyberTeal.copy(alpha = 0.5f),
+                    checkedThumbColor = ElectricViolet,
+                    checkedTrackColor = ElectricViolet.copy(alpha = 0.5f),
                     uncheckedThumbColor = TextGray,
                     uncheckedTrackColor = CardBorder
                 )

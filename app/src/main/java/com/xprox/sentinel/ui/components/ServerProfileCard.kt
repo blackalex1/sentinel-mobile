@@ -1,6 +1,5 @@
 package com.xprox.sentinel.ui.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -19,10 +18,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xprox.sentinel.config.XrayConfigManager
+import com.xprox.sentinel.data.LanguageManager
 import com.xprox.sentinel.theme.*
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -42,21 +43,19 @@ fun ServerProfileCard(
     var menuExpanded by remember { mutableStateOf(false) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
 
-    val cardShape = RoundedCornerShape(12.dp)
-
     if (showDeleteConfirmation) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirmation = false },
             title = {
                 Text(
-                    text = if (com.xprox.sentinel.data.LanguageManager.currentLanguage.value.code == "ru") "Удалить подключение?" else "Delete Connection?",
+                    text = if (LanguageManager.currentLanguage.value.code == "ru") "Удалить подключение?" else "Delete Connection?",
                     fontWeight = FontWeight.Bold,
-                    color = WarningRed
+                    color = WarningRose
                 )
             },
             text = {
                 Text(
-                    text = if (com.xprox.sentinel.data.LanguageManager.currentLanguage.value.code == "ru") {
+                    text = if (LanguageManager.currentLanguage.value.code == "ru") {
                         "Вы действительно хотите навсегда удалить подключение \"${profile.name}\"?"
                     } else {
                         "Are you sure you want to permanently delete connection \"${profile.name}\"?"
@@ -71,10 +70,10 @@ fun ServerProfileCard(
                         showDeleteConfirmation = false
                         onDelete()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = WarningRed)
+                    colors = ButtonDefaults.buttonColors(containerColor = WarningRose)
                 ) {
                     Text(
-                        text = if (com.xprox.sentinel.data.LanguageManager.currentLanguage.value.code == "ru") "Удалить" else "Delete",
+                        text = if (LanguageManager.currentLanguage.value.code == "ru") "Удалить" else "Delete",
                         color = TextWhite,
                         fontWeight = FontWeight.Bold
                     )
@@ -85,33 +84,29 @@ fun ServerProfileCard(
                     onClick = { showDeleteConfirmation = false }
                 ) {
                     Text(
-                        text = if (com.xprox.sentinel.data.LanguageManager.currentLanguage.value.code == "ru") "Отмена" else "Cancel",
+                        text = if (LanguageManager.currentLanguage.value.code == "ru") "Отмена" else "Cancel",
                         color = TextGray
                     )
                 }
             },
-            containerColor = DarkCard,
+            containerColor = DarkCardElevated,
             tonalElevation = 8.dp
         )
     }
 
-    Surface(
-        color = if (isSelected) CyberTeal.copy(alpha = 0.08f) else DarkCard,
-        shape = cardShape,
-        border = BorderStroke(
-            1.dp, 
-            if (isSelected) CyberTeal else CardBorder
-        ),
+    DoppelrandCard(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(cardShape)
             .combinedClickable(
                 onClick = { onSelect() },
                 onLongClick = { menuExpanded = true }
-            )
+            ),
+        borderColor = if (isSelected) ElectricViolet else DoppelrandShellBorder,
+        glowColor = if (isSelected) ElectricViolet else null,
+        contentPadding = PaddingValues(12.dp)
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -122,26 +117,27 @@ fun ServerProfileCard(
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
                     contentDescription = "Selected",
-                    tint = if (isSelected) CyberTeal else TextGray.copy(alpha = 0.3f),
+                    tint = if (isSelected) ElectricViolet else TextGray.copy(alpha = 0.3f),
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
                     Text(
                         text = profile.name,
-                        fontSize = 14.sp,
+                        fontSize = 13.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextWhite
                     )
                     val isDirect = profile.type.uppercase() == "DIRECT"
                     Text(
                         text = if (isDirect) {
-                            if (com.xprox.sentinel.data.LanguageManager.currentLanguage.value.code == "ru") "DIRECT • Режим анализа трафика" else "DIRECT • Traffic Analysis Mode"
+                            if (LanguageManager.currentLanguage.value.code == "ru") "DIRECT • Режим анализа трафика" else "DIRECT • Traffic Analysis Mode"
                         } else {
                             "${profile.type} • ${profile.address}"
                         },
                         fontSize = 11.sp,
-                        color = TextGray
+                        color = TextGray,
+                        fontFamily = FontFamily.Monospace
                     )
                 }
             }
@@ -156,15 +152,15 @@ fun ServerProfileCard(
                 } else if (isPinging) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(14.dp),
-                        color = CyberTeal,
+                        color = ElectricViolet,
                         strokeWidth = 2.dp
                     )
                 } else {
                     val pingColor = when {
                         pingMs == null -> TextGray.copy(alpha = 0.5f)
-                        pingMs < 100 -> CyberTeal
-                        pingMs < 300 -> Color(0xFFE5A93C)
-                        else -> WarningRed
+                        pingMs < 100 -> SecureGreen
+                        pingMs < 300 -> WarningAmber
+                        else -> WarningRose
                     }
                     val pingText = when {
                         pingMs == null -> "Ping"
@@ -172,11 +168,12 @@ fun ServerProfileCard(
                     }
                     Text(
                         text = pingText,
-                        fontSize = 11.sp,
+                        fontSize = 10.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = pingColor,
+                        fontFamily = FontFamily.Monospace,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
+                            .clip(RoundedCornerShape(6.dp))
                             .clickable { onPingClick() }
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     )
@@ -190,7 +187,7 @@ fun ServerProfileCard(
                         Icon(
                             imageVector = Icons.Default.MoreVert,
                             contentDescription = "Options",
-                            tint = CyberTeal,
+                            tint = CyberCyan,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -201,32 +198,32 @@ fun ServerProfileCard(
                         modifier = Modifier.sizeIn(minWidth = 160.dp)
                     ) {
                         DropdownMenuItem(
-                            text = { Text(if (com.xprox.sentinel.data.LanguageManager.currentLanguage.value.code == "ru") "Поделиться" else "Share", color = TextWhite) },
-                            leadingIcon = { Icon(Icons.Default.Share, contentDescription = null, tint = CyberTeal, modifier = Modifier.size(18.dp)) },
+                            text = { Text(if (LanguageManager.currentLanguage.value.code == "ru") "Поделиться" else "Share", color = TextWhite) },
+                            leadingIcon = { Icon(Icons.Default.Share, contentDescription = null, tint = CyberCyan, modifier = Modifier.size(18.dp)) },
                             onClick = {
                                 menuExpanded = false
                                 onExport()
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text(if (com.xprox.sentinel.data.LanguageManager.currentLanguage.value.code == "ru") "Дублировать" else "Clone", color = TextWhite) },
-                            leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null, tint = CyberTeal, modifier = Modifier.size(18.dp)) },
+                            text = { Text(if (LanguageManager.currentLanguage.value.code == "ru") "Дублировать" else "Clone", color = TextWhite) },
+                            leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null, tint = ElectricViolet, modifier = Modifier.size(18.dp)) },
                             onClick = {
                                 menuExpanded = false
                                 onClone()
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text(if (com.xprox.sentinel.data.LanguageManager.currentLanguage.value.code == "ru") "Редактировать" else "Edit", color = TextWhite) },
-                            leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, tint = CyberTeal, modifier = Modifier.size(18.dp)) },
+                            text = { Text(if (LanguageManager.currentLanguage.value.code == "ru") "Редактировать" else "Edit", color = TextWhite) },
+                            leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, tint = ElectricViolet, modifier = Modifier.size(18.dp)) },
                             onClick = {
                                 menuExpanded = false
                                 onEdit()
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text(if (com.xprox.sentinel.data.LanguageManager.currentLanguage.value.code == "ru") "Удалить" else "Delete", color = WarningRed) },
-                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = WarningRed, modifier = Modifier.size(18.dp)) },
+                            text = { Text(if (LanguageManager.currentLanguage.value.code == "ru") "Удалить" else "Delete", color = WarningRose) },
+                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = WarningRose, modifier = Modifier.size(18.dp)) },
                             onClick = {
                                 menuExpanded = false
                                 showDeleteConfirmation = true

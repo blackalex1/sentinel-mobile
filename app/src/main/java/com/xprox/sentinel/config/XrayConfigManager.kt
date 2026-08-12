@@ -52,22 +52,33 @@ object XrayConfigManager {
     /**
      * Finds a random open port for our local inbound socket proxy.
      */
-    fun findRandomOpenPort(): Int {
-        return try {
-            val socket = java.net.ServerSocket(0)
-            val port = socket.localPort
-            socket.close()
-            port
-        } catch (e: Exception) {
-            // Fallback to high ephemeral range
-            (30000..65000).random()
+    fun findRandomOpenPort(excludePorts: Set<Int> = emptySet()): Int {
+        for (attempt in 1..20) {
+            try {
+                val socket = java.net.ServerSocket()
+                socket.reuseAddress = true
+                socket.bind(java.net.InetSocketAddress("127.0.0.1", 0))
+                val port = socket.localPort
+                socket.close()
+                if (port > 0 && !excludePorts.contains(port)) {
+                    return port
+                }
+            } catch (e: Exception) {
+                // Ignore and retry
+            }
         }
+        // Fallback to high ephemeral range excluding any forbidden ports
+        var fallback = (30000..65000).random()
+        while (excludePorts.contains(fallback)) {
+            fallback = (30000..65000).random()
+        }
+        return fallback
     }
 
     /**
      * Generates extremely secure unique local proxy credentials for this session.
      */
-    fun generateSecureCredentials(): LocalProxyCredentials {
+    fun generateSecureCredentials(excludePorts: Set<Int> = emptySet()): LocalProxyCredentials {
         val random = SecureRandom()
         val usernameBytes = ByteArray(12)
         val tokenBytes = ByteArray(24)
@@ -81,7 +92,7 @@ object XrayConfigManager {
             .filter { it.isLetterOrDigit() }
 
         return LocalProxyCredentials(
-            port = findRandomOpenPort(),
+            port = findRandomOpenPort(excludePorts),
             username = username,
             token = token
         )
