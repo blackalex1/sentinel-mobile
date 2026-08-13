@@ -89,6 +89,19 @@ class VpnManagerService : VpnService() {
         var geoipRulesList = listOf("geoip:private", "geoip:ru")
         var geositeRulesList = listOf("geosite:google", "geosite:category-ads-all")
 
+        fun loadRoutingRules(context: Context) {
+            try {
+                allowedAppsList = XrayProfilePersistence.loadAllowedApps(context)
+                blockedAppsList = XrayProfilePersistence.loadBlockedApps(context).toList()
+                isBypassMode = XrayProfilePersistence.loadBypassMode(context)
+                geoipRulesList = XrayProfilePersistence.loadGeoIpRules(context)
+                geositeRulesList = XrayProfilePersistence.loadGeoSiteRules(context)
+                Log.d(TAG, "Loaded routing rules from persistence: ${geoipRulesList.size} geoip, ${geositeRulesList.size} geosite, ${allowedAppsList.size} allowed apps, bypassMode=$isBypassMode")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load routing rules from persistence", e)
+            }
+        }
+
         fun measureProfilePing(profile: XrayConfigManager.ServerProfile) {
             VpnNetworkHelper.measureProfilePing(profile, _pingMsFlow)
         }
@@ -125,6 +138,7 @@ class VpnManagerService : VpnService() {
         LanguageManager.init(this)
         com.xprox.sentinel.service.ThreatDetectionManager.init(this)
         loadSelectedProfile(this)
+        loadRoutingRules(this)
         VpnNotificationHelper.createNotificationChannel(this)
         registerHotspotReceiver()
     }
@@ -206,8 +220,9 @@ class VpnManagerService : VpnService() {
             // Setup Log Rotation at the start of a new VPN session (wipes active, shifts & saves 5 historical sessions)
             com.xprox.sentinel.log.LogManager.rotateLogs(this)
             
-            // Load selected profile from persistence to ensure we have the correct active profile name and details
+            // Load selected profile and routing rules from persistence to ensure we have the correct active profile name and details
             loadSelectedProfile(this)
+            loadRoutingRules(this)
             
             // Notify VPN service lifecycle observer
             VpnLifecycleProvider.listener?.onServiceStart(this, serviceScope, selectedProfile.id)
@@ -356,23 +371,24 @@ class VpnManagerService : VpnService() {
                 Log.i(TAG, "VPN Kill Switch is active. Disallowing bypass for all traffic.")
             }
 
+            // ALWAYS exclude our own app package to prevent routing loops regardless of split-tunneling mode
+            try {
+                builder.addDisallowedApplication(packageName)
+                Log.i(TAG, "Successfully excluded VPN app $packageName from global routing to prevent loops")
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not exclude own VPN app from routing", e)
+            }
+
             // Implement dynamic App Routing (Split Tunneling)
             if (isBypassMode) {
-                // Bypass Mode: proxy all except selected apps
-                // We must explicitly exclude our own app package to prevent routing loops
-                try {
-                    builder.addDisallowedApplication(packageName)
-                    Log.i(TAG, "Successfully excluded VPN app $packageName from global routing to prevent loops")
-                } catch (e: Exception) {
-                    Log.w(TAG, "Could not exclude own VPN app from routing", e)
-                }
-
                 allowedAppsList.forEach { appPackage ->
-                    try {
-                        builder.addDisallowedApplication(appPackage)
-                        Log.d(TAG, "Bypass mode: Excluded app $appPackage")
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Could not exclude app: $appPackage", e)
+                    if (appPackage != packageName) {
+                        try {
+                            builder.addDisallowedApplication(appPackage)
+                            Log.d(TAG, "Bypass mode: Excluded app $appPackage")
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Could not exclude app: $appPackage", e)
+                        }
                     }
                 }
             } else {
@@ -533,6 +549,7 @@ class VpnManagerService : VpnService() {
         if (!_isRunningFlow.value) return
         try {
             Log.i(TAG, "Reloading VPN and Xray config dynamically for profile: ${selectedProfile.name} (${selectedProfile.id})...")
+            loadRoutingRules(this)
             
             // Pre-resolve server hostname for the newly selected profile
             resolvedServerIp = null

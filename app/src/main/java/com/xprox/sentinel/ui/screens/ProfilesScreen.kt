@@ -1,6 +1,7 @@
 package com.xprox.sentinel.ui.screens
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
@@ -31,6 +32,15 @@ import com.xprox.sentinel.theme.*
 import com.xprox.sentinel.ui.screens.profiles.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+private fun notifyConfigChanged(context: Context) {
+    if (VpnManagerService.isRunningFlow.value) {
+        val intent = Intent(context, VpnManagerService::class.java).apply {
+            action = VpnManagerService.ACTION_RELOAD_CONFIG
+        }
+        context.startService(intent)
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -182,18 +192,22 @@ fun ProfilesScreen() {
                     onBypassRuChange = { enabled ->
                         bypassRu = enabled
                         XrayProfilePersistence.saveBypassRuSites(context, enabled)
+                        notifyConfigChanged(context)
                     },
                     onBypassTorrentsChange = { enabled ->
                         bypassTorrents = enabled
                         XrayProfilePersistence.saveBypassTorrents(context, enabled)
+                        notifyConfigChanged(context)
                     },
                     onBlockQuicChange = { enabled ->
                         blockQuic = enabled
                         XrayProfilePersistence.saveBlockQuic(context, enabled)
+                        notifyConfigChanged(context)
                     },
                     onBypassLanChange = { enabled ->
                         bypassLan = enabled
                         XrayProfilePersistence.saveBypassLan(context, enabled)
+                        notifyConfigChanged(context)
                     }
                 )
             }
@@ -232,6 +246,7 @@ fun ProfilesScreen() {
                                 XrayProfilePersistence.saveCustomBlockRules(context, nextList)
                             }
                         }
+                        notifyConfigChanged(context)
                     },
                     onRemoveCustomRule = { target, rule ->
                         when (target) {
@@ -251,6 +266,7 @@ fun ProfilesScreen() {
                                 XrayProfilePersistence.saveCustomBlockRules(context, nextList)
                             }
                         }
+                        notifyConfigChanged(context)
                     },
                     onGeoIpRuleToggle = { preset, checked ->
                         val nextSet = geoIpRules.toMutableSet()
@@ -258,6 +274,7 @@ fun ProfilesScreen() {
                         geoIpRules = nextSet
                         VpnManagerService.geoipRulesList = nextSet.toList()
                         XrayProfilePersistence.saveGeoIpRules(context, nextSet.toList())
+                        notifyConfigChanged(context)
                     },
                     onGeoSiteRuleToggle = { preset, checked ->
                         val nextSet = geoSiteRules.toMutableSet()
@@ -265,6 +282,7 @@ fun ProfilesScreen() {
                         geoSiteRules = nextSet
                         VpnManagerService.geositeRulesList = nextSet.toList()
                         XrayProfilePersistence.saveGeoSiteRules(context, nextSet.toList())
+                        notifyConfigChanged(context)
                     },
                     onGeoIpRuleRemove = { customRule ->
                         val nextSet = geoIpRules.toMutableSet()
@@ -272,6 +290,7 @@ fun ProfilesScreen() {
                         geoIpRules = nextSet
                         VpnManagerService.geoipRulesList = nextSet.toList()
                         XrayProfilePersistence.saveGeoIpRules(context, nextSet.toList())
+                        notifyConfigChanged(context)
                     },
                     onGeoSiteRuleRemove = { customRule ->
                         val nextSet = geoSiteRules.toMutableSet()
@@ -279,6 +298,7 @@ fun ProfilesScreen() {
                         geoSiteRules = nextSet
                         VpnManagerService.geositeRulesList = nextSet.toList()
                         XrayProfilePersistence.saveGeoSiteRules(context, nextSet.toList())
+                        notifyConfigChanged(context)
                     }
                 )
             }

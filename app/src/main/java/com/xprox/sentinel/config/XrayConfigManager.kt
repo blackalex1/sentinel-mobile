@@ -348,10 +348,20 @@ object XrayConfigManager {
         }
         if (isBypassLan) {
             lanIpList.forEach { if (isIpRule(it)) directIps.add(it) else directDomains.add(it) }
+            directDomains.addAll(listOf("domain:local", "keyword:.local", "keyword:.lan", "keyword:.home", "keyword:.router"))
         }
         
         for (rule in customDirect) {
             if (isIpRule(rule)) directIps.add(rule) else directDomains.add(rule)
+        }
+
+        // Always remove the active VPN server host and IP from direct rules to prevent routing loops
+        val serverHost = profile.address.trim()
+        if (serverHost.isNotEmpty()) {
+            directDomains.remove(serverHost)
+            directDomains.remove("domain:$serverHost")
+            directIps.remove(serverHost)
+            directIps.remove("$serverHost/32")
         }
 
         // Combine Proxy Domains & IPs
