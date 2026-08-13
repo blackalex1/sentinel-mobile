@@ -10,6 +10,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.*
@@ -18,7 +22,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -228,18 +234,54 @@ fun DashboardScreen(onNavigateToSettings: () -> Unit = {}) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        // App HUD Title
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(top = 8.dp)
+        // App Brand Capsule Header
+        Surface(
+            color = Color(0x0CFFFFFF),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.dp, Color(0x18FFFFFF)),
+            modifier = Modifier.padding(top = 2.dp, bottom = 2.dp)
         ) {
-            Text(
-                text = string("app_title"),
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = CyberTeal,
-                style = MaterialTheme.typography.titleLarge
-            )
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                // Live Security Status Beacon Dot
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .background(if (isRunning) SecureGreen else CyberCyan, CircleShape)
+                )
+                Spacer(modifier = Modifier.width(9.dp))
+
+                // Brand Title
+                Text(
+                    text = "SENTINEL",
+                    fontSize = 14.5.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = TextWhite,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 2.4.sp
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+
+                // Accent Sub-badge Pill
+                Surface(
+                    color = ElectricViolet.copy(alpha = 0.18f),
+                    shape = RoundedCornerShape(5.dp),
+                    border = BorderStroke(0.8.dp, ElectricViolet.copy(alpha = 0.45f))
+                ) {
+                    Text(
+                        text = "MOBILE",
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.Black,
+                        color = ElectricViolet,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 1.2.sp,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
         }
 
         // Radar Activation Node

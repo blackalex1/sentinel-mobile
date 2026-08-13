@@ -60,20 +60,21 @@ fun MainScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color.Transparent)
                         .navigationBarsPadding()
+                        .padding(start = 12.dp, end = 12.dp, bottom = 8.dp, top = 2.dp)
                 ) {
                     Surface(
-                        color = DarkCardElevated.copy(alpha = 0.95f),
-                        shape = RoundedCornerShape(24.dp),
+                        color = Color(0xF00D0D18),
+                        shape = RoundedCornerShape(22.dp),
                         border = BorderStroke(1.dp, CardBorder),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
-                            .height(64.dp)
+                            .height(66.dp)
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -87,7 +88,7 @@ fun MainScreen(
                                 )
 
                                 val bgPillColor by animateColorAsState(
-                                    targetValue = if (isSelected) ElectricViolet.copy(alpha = 0.15f) else Color.Transparent,
+                                    targetValue = if (isSelected) ElectricViolet.copy(alpha = 0.16f) else Color.Transparent,
                                     label = "bgPillColor"
                                 )
 
@@ -96,8 +97,8 @@ fun MainScreen(
                                     modifier = Modifier
                                         .weight(1f)
                                         .fillMaxHeight()
-                                        .padding(vertical = 6.dp, horizontal = 4.dp)
-                                        .clip(RoundedCornerShape(16.dp))
+                                        .padding(vertical = 2.dp, horizontal = 2.dp)
+                                        .clip(RoundedCornerShape(14.dp))
                                         .background(bgPillColor)
                                         .clickable(
                                             interactionSource = remember { MutableInteractionSource() },
@@ -114,12 +115,15 @@ fun MainScreen(
                                             tint = iconTint,
                                             modifier = Modifier.size(20.dp)
                                         )
-                                        Spacer(modifier = Modifier.height(3.dp))
+                                        Spacer(modifier = Modifier.height(2.dp))
                                         Text(
                                             text = string(tab.key),
-                                            fontSize = 9.5.sp,
+                                            fontSize = 11.sp,
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                            color = iconTint
+                                            color = iconTint,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            textAlign = TextAlign.Center
                                         )
                                     }
                                 }

@@ -2,18 +2,20 @@ package com.xprox.sentinel.service
 
 import android.util.Log
 import com.xprox.sentinel.config.XrayConfigManager
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.launch
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.Socket
 import java.net.URL
+import java.util.regex.Pattern
 
 object VpnNetworkHelper {
     private const val TAG = "VpnNetworkHelper"
+
+    private val IPV4_PATTERN = Pattern.compile("""\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b""")
+    private val IPV6_PATTERN = Pattern.compile("""\b(?:[A-Fa-f0-9]{1,4}:){7}[A-Fa-f0-9]{1,4}\b""")
 
     fun measureProfilePing(
         profile: XrayConfigManager.ServerProfile,
@@ -44,16 +46,48 @@ object VpnNetworkHelper {
         }
     }
 
+    private fun fetchSingleEndpoint(urlStr: String, proxy: Proxy, timeoutMs: Int = 3000): String? {
+        return try {
+            val url = URL(urlStr)
+            val connection = (url.openConnection(proxy) as java.net.HttpURLConnection).apply {
+                connectTimeout = timeoutMs
+                readTimeout = timeoutMs
+                useCaches = false
+                requestMethod = "GET"
+                setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+                setRequestProperty("Accept", "text/plain, application/json, */*")
+            }
+
+            val body = connection.inputStream.bufferedReader().use { it.readText() }.trim()
+            val v4Matcher = IPV4_PATTERN.matcher(body)
+            if (v4Matcher.find()) {
+                return v4Matcher.group(0)
+            }
+            val v6Matcher = IPV6_PATTERN.matcher(body)
+            if (v6Matcher.find()) {
+                return v6Matcher.group(0)
+            }
+            null
+        } catch (e: Exception) {
+            Log.d(TAG, "Fetch IP failed for $urlStr: ${e.message}")
+            null
+        }
+    }
+
     suspend fun suspendFetchPublicIp(
         socksPort: Int = 0,
         username: String? = null,
         token: String? = null
-    ): String? {
-        val endpoints = listOf(
+    ): String? = withContext(Dispatchers.IO) {
+        // Primary fastest & most reliable services chosen by user
+        val primaryEndpoints = listOf(
+            "https://ipwho.is/?output=text",
+            "https://ifconfig.co/ip"
+        )
+        // Fallback endpoints in case primary are unreachable
+        val fallbackEndpoints = listOf(
             "https://api.ipify.org",
-            "https://icanhazip.com",
-            "https://checkip.amazonaws.com",
-            "https://ifconfig.me/ip"
+            "https://checkip.amazonaws.com"
         )
 
         if (socksPort > 0 && !username.isNullOrEmpty() && !token.isNullOrEmpty()) {
@@ -70,28 +104,29 @@ object VpnNetworkHelper {
             Proxy.NO_PROXY
         }
 
-        var resultIp: String? = null
-        for (urlStr in endpoints) {
-            try {
-                val url = URL(urlStr)
-                val connection = url.openConnection(proxy) as java.net.HttpURLConnection
-                connection.connectTimeout = 4000
-                connection.readTimeout = 4000
-                connection.useCaches = false
-                connection.requestMethod = "GET"
-                
-                val text = connection.inputStream.bufferedReader().use { it.readText() }.trim()
-                val isIpv4 = text.matches(Regex("""\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"""))
-                val isIpv6 = !text.contains("<") && text.contains(":") && text.length in 3..45
-                if (isIpv4 || isIpv6) {
-                    resultIp = text
-                    break
-                }
-            } catch (e: Exception) {
-                Log.d(TAG, "Static fetch IP failed for $urlStr: ${e.message}")
+        // 1. Race primary endpoints concurrently
+        val primaryJobs = primaryEndpoints.map { url ->
+            async { fetchSingleEndpoint(url, proxy, timeoutMs = 2500) }
+        }
+
+        // Pick first non-null result
+        for (job in primaryJobs) {
+            val res = job.await()
+            if (!res.isNullOrEmpty()) {
+                primaryJobs.forEach { it.cancel() }
+                return@withContext res
             }
         }
-        return resultIp
+
+        // 2. If primary failed, try fallback endpoints
+        for (url in fallbackEndpoints) {
+            val res = fetchSingleEndpoint(url, proxy, timeoutMs = 3000)
+            if (!res.isNullOrEmpty()) {
+                return@withContext res
+            }
+        }
+
+        null
     }
 
     fun fetchPublicIp(
@@ -109,3 +144,4 @@ object VpnNetworkHelper {
         }
     }
 }
+

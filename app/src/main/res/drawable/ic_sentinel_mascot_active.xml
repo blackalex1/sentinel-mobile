@@ -1,0 +1,64 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="128dp"
+    android:height="128dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- Android Bugdroid Antenna Left (Energized Green/Cyan) -->
+    <path
+        android:pathData="M 38,22 L 26,8"
+        android:strokeWidth="5"
+        android:strokeColor="#22D3EE"
+        android:strokeLineCap="round" />
+
+    <!-- Android Bugdroid Antenna Right (Energized Green/Cyan) -->
+    <path
+        android:pathData="M 62,22 L 74,8"
+        android:strokeWidth="5"
+        android:strokeColor="#22D3EE"
+        android:strokeLineCap="round" />
+
+    <!-- Robot Bugdroid Head / Shield Helmet Body (Active Green Glow) -->
+    <path
+        android:pathData="M 50,16 C 76,16 82,26 82,42 L 82,66 C 82,82 50,96 50,96 C 50,96 18,82 18,66 L 18,42 C 18,26 24,16 50,16 Z"
+        android:strokeWidth="4.5"
+        android:strokeColor="#10B981"
+        android:fillColor="#091811" />
+
+    <!-- Left Cyber Cheek Wing (Emerald) -->
+    <path
+        android:pathData="M 18,42 L 34,52 L 34,74 L 18,66 Z"
+        android:fillColor="#10B981"
+        android:fillAlpha="0.55" />
+
+    <!-- Right Cyber Cheek Wing (Cyber Cyan) -->
+    <path
+        android:pathData="M 82,42 L 66,52 L 66,74 L 82,66 Z"
+        android:fillColor="#06B6D4"
+        android:fillAlpha="0.55" />
+
+    <!-- Robot Glowing Visor Eye Left (Neon Cyan) -->
+    <path
+        android:pathData="M 28,34 L 43,34 L 41,41 L 30,41 Z"
+        android:fillColor="#22D3EE" />
+
+    <!-- Robot Glowing Visor Eye Right (Neon Cyan) -->
+    <path
+        android:pathData="M 57,34 L 72,34 L 70,41 L 59,41 Z"
+        android:fillColor="#22D3EE" />
+
+    <!-- Diamond Plasma Crystal Core (Outer Emerald Diamond) -->
+    <path
+        android:pathData="M 50,44 L 64,58 L 50,80 L 36,58 Z"
+        android:fillColor="#10B981" />
+
+    <!-- Diamond Plasma Crystal Core (Inner Neon Spark) -->
+    <path
+        android:pathData="M 50,50 L 58,58 L 50,73 L 42,58 Z"
+        android:fillColor="#22D3EE" />
+
+    <!-- Diamond Plasma Core (White Radiant Heart) -->
+    <path
+        android:pathData="M 50,54 L 54,58 L 50,64 L 46,58 Z"
+        android:fillColor="#FFFFFF" />
+</vector>

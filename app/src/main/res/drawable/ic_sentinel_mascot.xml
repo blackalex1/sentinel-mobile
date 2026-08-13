@@ -1,0 +1,64 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="128dp"
+    android:height="128dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- Android Bugdroid Antenna Left -->
+    <path
+        android:pathData="M 38,22 L 26,8"
+        android:strokeWidth="5"
+        android:strokeColor="#06B6D4"
+        android:strokeLineCap="round" />
+
+    <!-- Android Bugdroid Antenna Right -->
+    <path
+        android:pathData="M 62,22 L 74,8"
+        android:strokeWidth="5"
+        android:strokeColor="#06B6D4"
+        android:strokeLineCap="round" />
+
+    <!-- Robot Bugdroid Head / Shield Helmet Body -->
+    <path
+        android:pathData="M 50,16 C 76,16 82,26 82,42 L 82,66 C 82,82 50,96 50,96 C 50,96 18,82 18,66 L 18,42 C 18,26 24,16 50,16 Z"
+        android:strokeWidth="4.5"
+        android:strokeColor="#8B5CF6"
+        android:fillColor="#0E0F1A" />
+
+    <!-- Left Cyber Cheek Wing (Electric Violet) -->
+    <path
+        android:pathData="M 18,42 L 34,52 L 34,74 L 18,66 Z"
+        android:fillColor="#8B5CF6"
+        android:fillAlpha="0.5" />
+
+    <!-- Right Cyber Cheek Wing (Cyber Teal) -->
+    <path
+        android:pathData="M 82,42 L 66,52 L 66,74 L 82,66 Z"
+        android:fillColor="#06B6D4"
+        android:fillAlpha="0.5" />
+
+    <!-- Robot Glowing Visor Eye Left -->
+    <path
+        android:pathData="M 28,34 L 43,34 L 41,41 L 30,41 Z"
+        android:fillColor="#06B6D4" />
+
+    <!-- Robot Glowing Visor Eye Right -->
+    <path
+        android:pathData="M 57,34 L 72,34 L 70,41 L 59,41 Z"
+        android:fillColor="#06B6D4" />
+
+    <!-- Diamond Plasma Crystal Core (Outer Violet Diamond) -->
+    <path
+        android:pathData="M 50,44 L 64,58 L 50,80 L 36,58 Z"
+        android:fillColor="#8B5CF6" />
+
+    <!-- Diamond Plasma Crystal Core (Inner Cyan Spark) -->
+    <path
+        android:pathData="M 50,50 L 58,58 L 50,73 L 42,58 Z"
+        android:fillColor="#38BDF8" />
+
+    <!-- Diamond Plasma Core (White Radiant Heart) -->
+    <path
+        android:pathData="M 50,54 L 54,58 L 50,64 L 46,58 Z"
+        android:fillColor="#FFFFFF" />
+</vector>

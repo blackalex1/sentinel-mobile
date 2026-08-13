@@ -130,6 +130,41 @@ class SentinelPairingServer(
                     return
                 }
 
+                // Handle direct active proxy configuration request
+                if (requestLine.startsWith("GET /pair/config", ignoreCase = true) ||
+                    requestLine.startsWith("GET /config", ignoreCase = true)) {
+                    val isSocksEnabled = XrayProfilePersistence.loadLanSharingSocks(context)
+                    val isHttpEnabled = XrayProfilePersistence.loadLanSharingHttp(context)
+                    val proxyType = if (isSocksEnabled) "SOCKS5" else if (isHttpEnabled) "HTTP" else "SOCKS5"
+                    val port = if (proxyType == "SOCKS5") socksPort else httpPort
+                    val isAuth = XrayProfilePersistence.loadLanSharingAuth(context)
+
+                    val jsonResp = JSONObject().apply {
+                        put("status", "ok")
+                        put("success", true)
+                        put("proxyType", proxyType)
+                        put("port", port)
+                        put("socksPort", socksPort)
+                        put("httpPort", httpPort)
+                        put("authRequired", isAuth)
+                        if (isAuth && !username.isNullOrEmpty()) put("username", username)
+                        if (isAuth && !token.isNullOrEmpty()) put("password", token)
+                    }
+
+                    val respBytes = jsonResp.toString().toByteArray(Charsets.UTF_8)
+                    val response = "HTTP/1.1 200 OK\r\n" +
+                            "Content-Type: application/json; charset=UTF-8\r\n" +
+                            "Access-Control-Allow-Origin: *\r\n" +
+                            "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n" +
+                            "Access-Control-Allow-Headers: *\r\n" +
+                            "Content-Length: ${respBytes.size}\r\n" +
+                            "Connection: close\r\n\r\n"
+                    out.write(response.toByteArray(Charsets.UTF_8))
+                    out.write(respBytes)
+                    out.flush()
+                    return
+                }
+
                 if (requestLine.startsWith("POST /pair/request", ignoreCase = true)) {
                     val bodyChars = CharArray(contentLength)
                     if (contentLength > 0) {
@@ -162,6 +197,7 @@ class SentinelPairingServer(
                         val isHttpEnabled = XrayProfilePersistence.loadLanSharingHttp(context)
                         val proxyType = if (isSocksEnabled) "SOCKS5" else if (isHttpEnabled) "HTTP" else "SOCKS5"
                         val port = if (proxyType == "SOCKS5") socksPort else httpPort
+                        val isAuth = XrayProfilePersistence.loadLanSharingAuth(context)
 
                         val jsonResp = JSONObject().apply {
                             put("success", true)
@@ -169,8 +205,9 @@ class SentinelPairingServer(
                             put("port", port)
                             put("socksPort", socksPort)
                             put("httpPort", httpPort)
-                            if (!username.isNullOrEmpty()) put("username", username)
-                            if (!token.isNullOrEmpty()) put("password", token)
+                            put("authRequired", isAuth)
+                            if (isAuth && !username.isNullOrEmpty()) put("username", username)
+                            if (isAuth && !token.isNullOrEmpty()) put("password", token)
                             put("pinVerified", pinCode)
                         }
 

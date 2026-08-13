@@ -314,7 +314,7 @@ object XrayConfigManager {
         // Dynamic Quick Actions Preferences from SmartRoutingPanel
         val quickPrefs = context.getSharedPreferences("sentinel_quick_actions_prefs", Context.MODE_PRIVATE)
         val enabledIpService = quickPrefs.getBoolean("enabled_ip_service", true)
-        val actionIpService = quickPrefs.getString("action_ip_service", "DIRECT") ?: "DIRECT"
+        val actionIpService = quickPrefs.getString("action_ip_service", "VPN") ?: "VPN"
         val enabledAds = quickPrefs.getBoolean("enabled_ads", false)
         val actionAds = quickPrefs.getString("action_ads", "BLOCKED") ?: "BLOCKED"
         val enabledCn = quickPrefs.getBoolean("enabled_cn", false)

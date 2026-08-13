@@ -102,25 +102,6 @@ fun ProfilesScreen() {
             .background(Color.Transparent)
             .padding(20.dp)
     ) {
-        // Top Eyebrow Badge & Header
-        Surface(
-            color = ElectricViolet.copy(alpha = 0.15f),
-            shape = RoundedCornerShape(100.dp),
-            border = BorderStroke(1.dp, ElectricViolet.copy(alpha = 0.4f))
-        ) {
-            Text(
-                text = "DYNAMIC ROUTING ENGINE",
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                color = ElectricViolet,
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = 1.2.sp,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
         Text(
             text = string("profiles_title"),
             fontSize = 22.sp,
