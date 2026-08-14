@@ -92,6 +92,10 @@ object InboundConfigBuilder {
                       "settings": {
                         $socksAuthJson
                         "udp": true
+                      },
+                      "sniffing": {
+                        "enabled": true,
+                        "destOverride": ["http", "tls", "quic"]
                       }
                     }
                     """.trimIndent())
