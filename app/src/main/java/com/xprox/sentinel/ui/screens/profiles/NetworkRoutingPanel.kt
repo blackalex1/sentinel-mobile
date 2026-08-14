@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
@@ -22,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -66,12 +68,28 @@ fun NetworkRoutingPanel(
 
     val prefs = remember { context.getSharedPreferences("sentinel_routing_priority_prefs", Context.MODE_PRIVATE) }
 
+    fun getCleanRuleName(id: String, name: String): String {
+        if (id == "1" || name.contains("BitTorrent", ignoreCase = true)) {
+            return if (isRu) "BitTorrent трафик" else "BitTorrent Traffic"
+        }
+        if (id == "2" || name.contains("определения IP", ignoreCase = true) || name.contains("IP Services", ignoreCase = true) || name.contains("IP Checkers", ignoreCase = true)) {
+            return if (isRu) "Определение IP" else "IP Checkers"
+        }
+        if (id == "3" || name.contains("RU Sites", ignoreCase = true) || name.contains("России", ignoreCase = true)) {
+            return if (isRu) "Сайты России (RU)" else "RU Sites"
+        }
+        if (id == "4" || name.contains("Local", ignoreCase = true) || name.contains("Локальн", ignoreCase = true)) {
+            return if (isRu) "Локальная сеть (LAN)" else "Local Private IPs"
+        }
+        return name
+    }
+
     fun loadSavedTableRules(): List<RoutingTableRule> {
         val defaultList = listOf(
-            RoutingTableRule("1", "Block BitTorrent", "Domains: 2 шт.", "BLOCKED", true),
-            RoutingTableRule("2", "Сервисы определения IP", "Domains: 3 шт.", "VPN", true),
-            RoutingTableRule("3", "RU Sites", "Domains: 1 шт. • IPs: geoip:ru", "DIRECT", true),
-            RoutingTableRule("4", "Local Private IPs", "IPs: geoip:private", "DIRECT", true)
+            RoutingTableRule("1", if (isRu) "BitTorrent трафик" else "BitTorrent Traffic", "BitTorrent", "BLOCKED", true),
+            RoutingTableRule("2", if (isRu) "Определение IP" else "IP Checkers", "IP Checkers", "DIRECT", true),
+            RoutingTableRule("3", if (isRu) "Сайты России (RU)" else "RU Sites", "RU Sites", "DIRECT", true),
+            RoutingTableRule("4", if (isRu) "Локальная сеть (LAN)" else "Local Private IPs", "Local IPs", "DIRECT", true)
         )
         val jsonStr = prefs.getString("table_rules_json", null) ?: return defaultList
         return try {
@@ -79,13 +97,18 @@ fun NetworkRoutingPanel(
             val list = mutableListOf<RoutingTableRule>()
             for (i in 0 until arr.length()) {
                 val obj = arr.getJSONObject(i)
+                val id = obj.optString("id", "$i")
+                val name = obj.optString("name", "")
+                val cond = obj.optString("conditions", "")
+                val action = obj.optString("action", "DIRECT")
+                val enabled = obj.optBoolean("enabled", true)
                 list.add(
                     RoutingTableRule(
-                        id = obj.optString("id", "$i"),
-                        name = obj.optString("name", ""),
-                        conditions = obj.optString("conditions", ""),
-                        action = obj.optString("action", "DIRECT"),
-                        enabled = obj.optBoolean("enabled", true)
+                        id = id,
+                        name = getCleanRuleName(id, name),
+                        conditions = cond,
+                        action = action,
+                        enabled = enabled
                     )
                 )
             }
@@ -109,6 +132,14 @@ fun NetworkRoutingPanel(
                 put("enabled", rule.enabled)
             }
             jsonArray.put(obj)
+
+            if (rule.id == "2" || rule.name.contains("определения IP", ignoreCase = true) || rule.name.contains("IP Services", ignoreCase = true)) {
+                context.getSharedPreferences("sentinel_quick_actions_prefs", Context.MODE_PRIVATE)
+                    .edit()
+                    .putBoolean("enabled_ip_service", rule.enabled)
+                    .putString("action_ip_service", rule.action)
+                    .apply()
+            }
         }
         prefs.edit().putString("table_rules_json", jsonArray.toString()).apply()
         val intent = android.content.Intent(context, VpnManagerService::class.java).apply {
@@ -211,16 +242,16 @@ fun NetworkRoutingPanel(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    .padding(horizontal = 12.dp, vertical = 11.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // Drag Handle :: Icon with Smooth Floating Drag Gesture
+                                // Drag Handle :: Icon
                                 Icon(
                                     imageVector = Icons.Default.Menu,
                                     contentDescription = "Drag Handle",
                                     tint = if (isDraggingThis) ElectricViolet else TextWhite.copy(alpha = 0.6f),
                                     modifier = Modifier
-                                        .size(24.dp)
+                                        .size(22.dp)
                                         .padding(end = 4.dp)
                                         .pointerInput(tableRules.size) {
                                             detectVerticalDragGestures(
@@ -256,27 +287,27 @@ fun NetworkRoutingPanel(
                                         }
                                 )
 
-                                // Priority Index Badge
+                                // Priority Index (#1)
                                 Text(
                                     text = "#${index + 1}",
                                     color = ElectricViolet,
-                                    fontSize = 10.5.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.Monospace,
-                                    modifier = Modifier.padding(end = 8.dp)
+                                    modifier = Modifier.padding(end = 6.dp)
                                 )
 
-                                // Up / Down Arrows
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(end = 8.dp)
+                                // Up / Down Reorder Arrows
+                                Column(
+                                    modifier = Modifier.padding(end = 8.dp),
+                                    verticalArrangement = Arrangement.Center
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.KeyboardArrowUp,
                                         contentDescription = "Move Up",
                                         tint = if (index > 0) TextWhite else TextGray.copy(alpha = 0.25f),
                                         modifier = Modifier
-                                            .size(16.dp)
+                                            .size(13.dp)
                                             .clickable(enabled = index > 0) { moveRuleUp(index) }
                                     )
                                     Icon(
@@ -284,33 +315,25 @@ fun NetworkRoutingPanel(
                                         contentDescription = "Move Down",
                                         tint = if (index < tableRules.size - 1) TextWhite else TextGray.copy(alpha = 0.25f),
                                         modifier = Modifier
-                                            .size(16.dp)
+                                            .size(13.dp)
                                             .clickable(enabled = index < tableRules.size - 1) { moveRuleDown(index) }
                                     )
                                 }
 
-                                // Rule Title and Conditions Column
-                                Column(modifier = Modifier.weight(1f).padding(end = 6.dp)) {
-                                    Text(
-                                        text = rule.name,
-                                        color = TextWhite,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = rule.conditions,
-                                        color = CyberCyan,
-                                        fontSize = 10.5.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
+                                // Full Clean Rule Title
+                                Text(
+                                    text = rule.name,
+                                    color = TextWhite,
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(end = 6.dp),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
 
-                                // Action Dropdown Pill (BLOCKED / DIRECT / VPN)
+                                // Action Dropdown Selector (BLOCKED / DIRECT / VPN)
                                 Box(modifier = Modifier.padding(end = 6.dp)) {
                                     Surface(
                                         color = actionColor.copy(alpha = 0.18f),
@@ -375,15 +398,16 @@ fun NetworkRoutingPanel(
                                 // Enable Switch
                                 Switch(
                                     checked = rule.enabled,
-                                    onCheckedChange = { checked ->
+                                    onCheckedChange = { chk ->
                                         val nextList = tableRules.mapIndexed { i, r ->
-                                            if (i == index) r.copy(enabled = checked) else r
+                                            if (i == index) r.copy(enabled = chk) else r
                                         }
                                         saveTableRules(nextList)
                                     },
+                                    modifier = Modifier.scale(0.85f),
                                     colors = SwitchDefaults.colors(
                                         checkedThumbColor = actionColor,
-                                        checkedTrackColor = actionColor.copy(alpha = 0.4f),
+                                        checkedTrackColor = actionColor.copy(alpha = 0.35f),
                                         uncheckedThumbColor = TextGray,
                                         uncheckedTrackColor = CardBorder
                                     )

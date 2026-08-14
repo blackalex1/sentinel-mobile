@@ -1,5 +1,8 @@
 package com.xprox.sentinel.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -9,6 +12,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,6 +27,8 @@ import com.xprox.sentinel.theme.*
  *
  * Outer Shell: 22dp corner radius, 5dp padding, subtle translucent border
  * Inner Core: 16dp corner radius, DarkCard (#0D0D15) surface
+ *
+ * Built-in 400ms smooth color transition animation on state toggle.
  */
 @Composable
 fun DoppelrandCard(
@@ -36,12 +42,18 @@ fun DoppelrandCard(
 ) {
     val outerShape = RoundedCornerShape(22.dp)
     val innerShape = RoundedCornerShape(16.dp)
-    val finalBorderColor = glowColor?.copy(alpha = 0.4f) ?: borderColor
+
+    val targetBorderColor = glowColor?.copy(alpha = 0.45f) ?: borderColor
+    val animatedBorderColor by animateColorAsState(
+        targetValue = targetBorderColor,
+        animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+        label = "doppelrandBorderColor"
+    )
 
     Surface(
         color = DoppelrandShellBg,
         shape = outerShape,
-        border = BorderStroke(1.dp, finalBorderColor),
+        border = BorderStroke(1.dp, animatedBorderColor),
         modifier = modifier.then(
             if (onClick != null) {
                 Modifier

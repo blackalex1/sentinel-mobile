@@ -18,6 +18,26 @@ object InboundConfigBuilder {
         val lanHttpEnabled = XrayProfilePersistence.loadLanSharingHttp(context)
         val lanSocksEnabled = XrayProfilePersistence.loadLanSharingSocks(context)
 
+        val sniffingEnabled = XrayProfilePersistence.loadSniffingEnabled(context)
+        val sniffHttp = XrayProfilePersistence.loadSniffHttp(context)
+        val sniffTls = XrayProfilePersistence.loadSniffTls(context)
+        val sniffQuic = XrayProfilePersistence.loadSniffQuic(context)
+        val sniffRouteOnly = XrayProfilePersistence.loadSniffRouteOnly(context)
+
+        val dests = mutableListOf<String>()
+        if (sniffHttp) dests.add("\"http\"")
+        if (sniffTls) dests.add("\"tls\"")
+        if (sniffQuic) dests.add("\"quic\"")
+        val destsJson = dests.joinToString(", ")
+
+        val sniffingBlock = """
+              "sniffing": {
+                "enabled": $sniffingEnabled,
+                "destOverride": [$destsJson],
+                "routeOnly": $sniffRouteOnly
+              }
+        """.trimIndent()
+
         return buildString {
             append("[\n")
             append("            {\n")
@@ -34,7 +54,8 @@ object InboundConfigBuilder {
             append("                  }\n")
             append("                ],\n")
             append("                \"udp\": false\n")
-            append("              }\n")
+            append("              },\n")
+            append("              $sniffingBlock\n")
             append("            },\n")
             append("            {\n")
             append("              \"tag\": \"tun-in\",\n")
@@ -45,10 +66,7 @@ object InboundConfigBuilder {
             append("                \"stack\": \"gvisor\",\n")
             append("                \"gateway\": [\"10.0.0.1/24\", \"fd00::1/64\"]\n")
             append("              },\n")
-            append("              \"sniffing\": {\n")
-            append("                \"enabled\": true,\n")
-            append("                \"destOverride\": [\"http\", \"tls\", \"quic\"]\n")
-            append("              }\n")
+            append("              $sniffingBlock\n")
             append("            }")
 
             if (isLanSharingEnabled) {
@@ -68,10 +86,7 @@ object InboundConfigBuilder {
                       "settings": {
                         "allowTransparent": false$httpAuthJson
                       },
-                      "sniffing": {
-                        "enabled": true,
-                        "destOverride": ["http", "tls", "quic"]
-                      }
+                      $sniffingBlock
                     }
                     """.trimIndent())
                 }
@@ -93,10 +108,7 @@ object InboundConfigBuilder {
                         $socksAuthJson
                         "udp": true
                       },
-                      "sniffing": {
-                        "enabled": true,
-                        "destOverride": ["http", "tls", "quic"]
-                      }
+                      $sniffingBlock
                     }
                     """.trimIndent())
                 }

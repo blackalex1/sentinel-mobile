@@ -280,14 +280,33 @@ object XrayConfigManager {
         }
 
         val ruDomainsList = listOf(
+            "geosite:category-ru",
+            "geosite:tld-ru",
             "geosite:category-gov-ru",
             "geosite:category-bank-ru",
             "geosite:category-ecommerce-ru",
             "geosite:category-media-ru",
             "geosite:category-retail-ru",
+            "geosite:category-entertainment-ru",
+            "geosite:category-education-ru",
+            "geosite:category-forums-ru",
+            "geosite:category-tech-media-ru",
+            "geosite:category-travel-ru",
+            "geosite:category-ai-ru",
             "geosite:yandex",
             "geosite:vk",
-            "geosite:category-ru",
+            "geosite:mailru",
+            "geosite:mailru-group",
+            "geosite:rutube",
+            "geosite:autoru",
+            "geosite:regru",
+            "geosite:nic-ru",
+            "geosite:tbank-ru",
+            "geosite:mts-ru",
+            "geosite:t2-ru",
+            "domain:ru",
+            "domain:su",
+            "domain:xn--p1ai",
             "telega.me", "2gis.com", "2gis.ru",
             "47news.ru", "alfabank.ru", "auth-nsdi.ru", "auto.ru", "avito.ru", "avito.st", "cdn-vk.ru",
             "cikrf.ru", "dzen.ru", "gazeta.ru", "gosuslugi.ru", "gov.ru", "government.ru", "gu-st.ru",
@@ -296,8 +315,10 @@ object XrayConfigManager {
             "pochta.ru", "rambler.ru", "rbc.ru", "res-nsdi.ru", "rutube.ru", "rutubelist.ru", "rzd.ru",
             "t2.ru", "taximaxim.ru", "tutu.ru", "userapi.com", "vk-portal.net", "vk.com", "vk.ru",
             "vtb.ru", "wb.ru", "wildberries.ru", "ya.ru", "yandex.com", "yandex.net", "yandex.ru",
-            "yastatic.net", "mos.ru", "tbank.ru", "cdn-tinkoff.ru", "tinkoff.ru", "nalog.ru"
+            "yastatic.net", "mos.ru", "tbank.ru", "cdn-tinkoff.ru", "tinkoff.ru", "nalog.ru",
+            "sberbank.ru", "sber.ru", "megafon.ru", "mts.ru", "beeline.ru", "rostelecom.ru", "rt.ru"
         )
+        val ruIpsList = listOf("geoip:ru")
         val lanIpList = listOf(
             "geoip:private",
             "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16",
@@ -311,16 +332,39 @@ object XrayConfigManager {
             "domain:rutracker.org", "domain:rutor.is", "domain:opentor.org", "domain:nyaa.si"
         )
 
-        // Dynamic Quick Actions Preferences from SmartRoutingPanel
+        // Dynamic Quick Actions Preferences from SmartRoutingPanel & Custom Table Rules
         val quickPrefs = context.getSharedPreferences("sentinel_quick_actions_prefs", Context.MODE_PRIVATE)
-        val enabledIpService = quickPrefs.getBoolean("enabled_ip_service", true)
-        val actionIpService = quickPrefs.getString("action_ip_service", "VPN") ?: "VPN"
-        val enabledAds = quickPrefs.getBoolean("enabled_ads", false)
-        val actionAds = quickPrefs.getString("action_ads", "BLOCKED") ?: "BLOCKED"
-        val enabledCn = quickPrefs.getBoolean("enabled_cn", false)
-        val actionCn = quickPrefs.getString("action_cn", "BLOCKED") ?: "BLOCKED"
-        val enabledUs = quickPrefs.getBoolean("enabled_us", false)
-        val actionUs = quickPrefs.getString("action_us", "BLOCKED") ?: "BLOCKED"
+        var enabledIpService = quickPrefs.getBoolean("enabled_ip_service", true)
+        var actionIpService = quickPrefs.getString("action_ip_service", "VPN") ?: "VPN"
+        var enabledAds = quickPrefs.getBoolean("enabled_ads", false)
+        var actionAds = quickPrefs.getString("action_ads", "BLOCKED") ?: "BLOCKED"
+        var enabledCn = quickPrefs.getBoolean("enabled_cn", false)
+        var actionCn = quickPrefs.getString("action_cn", "BLOCKED") ?: "BLOCKED"
+        var enabledUs = quickPrefs.getBoolean("enabled_us", false)
+        var actionUs = quickPrefs.getString("action_us", "BLOCKED") ?: "BLOCKED"
+
+        // Honor user overrides from sentinel_routing_priority_prefs (СВОИ ПРАВИЛА)
+        val routingPriorityPrefs = context.getSharedPreferences("sentinel_routing_priority_prefs", Context.MODE_PRIVATE)
+        val tableRulesJson = routingPriorityPrefs.getString("table_rules_json", null)
+        if (!tableRulesJson.isNullOrEmpty()) {
+            try {
+                val arr = org.json.JSONArray(tableRulesJson)
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    val id = obj.optString("id", "")
+                    val name = obj.optString("name", "")
+                    val act = obj.optString("action", "")
+                    val en = obj.optBoolean("enabled", true)
+
+                    if (id == "2" || name.contains("определения IP", ignoreCase = true) || name.contains("IP Services", ignoreCase = true)) {
+                        actionIpService = act
+                        enabledIpService = en
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to parse table_rules_json", e)
+            }
+        }
 
         val ipCheckerDomains = listOf(
             "domain:ipify.org", "domain:api.ipify.org", "domain:checkip.amazonaws.com", "domain:ifconfig.me", "domain:ifconfig.co", "domain:ifconfig.io",
@@ -342,6 +386,7 @@ object XrayConfigManager {
         val directIps = mutableListOf<String>()
         if (isBypassRu) {
             ruDomainsList.forEach { if (isIpRule(it)) directIps.add(it) else directDomains.add(it) }
+            directIps.addAll(ruIpsList)
         }
         if (isBypassTorrents) {
             torrentTrackers.forEach { if (isIpRule(it)) directIps.add(it) else directDomains.add(it) }
@@ -398,7 +443,13 @@ object XrayConfigManager {
 
         // Apply Quick Ads Rule
         if (enabledAds) {
-            val adsDomains = listOf("geosite:category-ads-all")
+            val adsDomains = listOf(
+                "geosite:category-ads-all",
+                "geosite:category-ads",
+                "geosite:adguard",
+                "geosite:adblock",
+                "geosite:adblockplus"
+            )
             when (actionAds.uppercase()) {
                 "DIRECT" -> directDomains.addAll(adsDomains)
                 "VPN" -> proxyDomains.addAll(adsDomains)
@@ -406,9 +457,18 @@ object XrayConfigManager {
             }
         }
 
+        fun normalizeGeosite(rule: String): String {
+            return rule.trim()
+        }
+
         // Apply Quick China Rule
         if (enabledCn) {
-            val cnDomains = listOf("geosite:cn")
+            val cnDomains = listOf(
+                "geosite:cn",
+                "geosite:geolocation-cn",
+                "geosite:tld-cn",
+                "domain:cn"
+            )
             val cnIps = listOf("geoip:cn")
             when (actionCn.uppercase()) {
                 "DIRECT" -> { directDomains.addAll(cnDomains); directIps.addAll(cnIps) }
@@ -419,7 +479,7 @@ object XrayConfigManager {
 
         // Apply Quick US Rule
         if (enabledUs) {
-            val usDomains = listOf("geosite:us")
+            val usDomains = listOf("domain:us", "domain:gov", "domain:mil")
             val usIps = listOf("geoip:us")
             when (actionUs.uppercase()) {
                 "DIRECT" -> { directDomains.addAll(usDomains); directIps.addAll(usIps) }
@@ -449,7 +509,7 @@ object XrayConfigManager {
         val smartDirectDomainsRule = if (directDomains.isNotEmpty()) """
             {
               "type": "field",
-              "domain": ${directDomains.distinct().joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
+              "domain": ${directDomains.distinct().map { normalizeGeosite(it) }.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
               "outboundTag": "direct"
             },
         """.trimIndent().prependIndent("              ") else ""
@@ -465,7 +525,7 @@ object XrayConfigManager {
         val smartProxyDomainsRule = if (proxyDomains.isNotEmpty()) """
             {
               "type": "field",
-              "domain": ${proxyDomains.distinct().joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
+              "domain": ${proxyDomains.distinct().map { normalizeGeosite(it) }.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
               "outboundTag": "proxy"
             },
         """.trimIndent().prependIndent("              ") else ""
@@ -481,7 +541,7 @@ object XrayConfigManager {
         val smartBlockDomainsRule = if (blockDomains.isNotEmpty()) """
             {
               "type": "field",
-              "domain": ${blockDomains.distinct().joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
+              "domain": ${blockDomains.distinct().map { normalizeGeosite(it) }.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
               "outboundTag": "block"
             },
         """.trimIndent().prependIndent("              ") else ""
@@ -508,7 +568,7 @@ object XrayConfigManager {
             """
             {
               "type": "field",
-              "domain": ${geositeRules.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
+              "domain": ${geositeRules.map { normalizeGeosite(it) }.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
               "outboundTag": "proxy"
             },
             """.trimIndent().prependIndent("              ")

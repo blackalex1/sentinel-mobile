@@ -163,6 +163,25 @@ fun DashboardRadarButton(
         label = "refreshRotation"
     )
 
+    // Smooth Disconnect & Connect Color and Glow transitions
+    val animatedPrimaryColor by animateColorAsState(
+        targetValue = if (isRunning) SecureGreen else ElectricViolet,
+        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+        label = "animatedPrimaryColor"
+    )
+
+    val animatedAccentColor by animateColorAsState(
+        targetValue = if (isRunning) CyberCyan else ElectricViolet,
+        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+        label = "animatedAccentColor"
+    )
+
+    val runningGlowAlpha by animateFloatAsState(
+        targetValue = if (isRunning) 1.0f else 0.0f,
+        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+        label = "runningGlowAlpha"
+    )
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -174,15 +193,15 @@ fun DashboardRadarButton(
             contentAlignment = Alignment.Center,
             modifier = Modifier.size(240.dp)
         ) {
-            // Ambient Outer Glow Halo (Only active when running)
-            if (isRunning) {
+            // Ambient Outer Glow Halo (Smoothly fades on disconnect)
+            if (runningGlowAlpha > 0.01f) {
                 Surface(
                     modifier = Modifier
                         .size(230.dp)
                         .graphicsLayer {
                             scaleX = pulseGlow
                             scaleY = pulseGlow
-                            alpha = 0.18f * pulseGlow
+                            alpha = 0.18f * pulseGlow * runningGlowAlpha
                         },
                     shape = CircleShape,
                     color = SecureGreen
@@ -202,13 +221,13 @@ fun DashboardRadarButton(
                 val maxRadius = size.width / 2f - 2.dp.toPx()
                 val coreRadius = 68.dp.toPx()
 
-                val primaryColor = if (isRunning) SecureGreen else ElectricViolet
-                val accentColor = if (isRunning) CyberCyan else ElectricViolet
+                val primaryColor = animatedPrimaryColor
+                val accentColor = animatedAccentColor
 
-                // 1. Expanding Sonar Wave Ripples (Active Mode)
-                if (isRunning) {
+                // 1. Expanding Sonar Wave Ripples (Smoothly fade on disconnect)
+                if (runningGlowAlpha > 0.01f) {
                     val r1 = coreRadius + (maxRadius - coreRadius) * sonarWave1
-                    val a1 = (1f - sonarWave1) * 0.35f
+                    val a1 = (1f - sonarWave1) * 0.35f * runningGlowAlpha
                     drawCircle(
                         color = SecureGreen.copy(alpha = a1),
                         radius = r1,
@@ -217,7 +236,7 @@ fun DashboardRadarButton(
                     )
 
                     val r2 = coreRadius + (maxRadius - coreRadius) * sonarWave2
-                    val a2 = (1f - sonarWave2) * 0.35f
+                    val a2 = (1f - sonarWave2) * 0.35f * runningGlowAlpha
                     drawCircle(
                         color = CyberCyan.copy(alpha = a2),
                         radius = r2,
@@ -226,8 +245,8 @@ fun DashboardRadarButton(
                     )
                 }
 
-                // 2. Rotating Phosphor Radar Sector Sweep Cone & Leading Laser Line
-                if (isRunning) {
+                // 2. Rotating Phosphor Radar Sector Sweep Cone & Leading Laser Line (Smoothly fade on disconnect)
+                if (runningGlowAlpha > 0.01f) {
                     drawContext.canvas.save()
                     drawContext.transform.rotate(sweepRotation, centerOffset)
 
@@ -236,9 +255,9 @@ fun DashboardRadarButton(
                         brush = Brush.sweepGradient(
                             0f to Color.Transparent,
                             0.75f to Color.Transparent,
-                            0.833f to SecureGreen.copy(alpha = 0.04f),
-                            0.94f to SecureGreen.copy(alpha = 0.20f),
-                            1f to SecureGreen.copy(alpha = 0.45f)
+                            0.833f to SecureGreen.copy(alpha = 0.04f * runningGlowAlpha),
+                            0.94f to SecureGreen.copy(alpha = 0.20f * runningGlowAlpha),
+                            1f to SecureGreen.copy(alpha = 0.45f * runningGlowAlpha)
                         ),
                         startAngle = 0f,
                         sweepAngle = 360f,
@@ -250,7 +269,7 @@ fun DashboardRadarButton(
                     // Leading Laser Sweep Line
                     drawLine(
                         brush = Brush.linearGradient(
-                            colors = listOf(Color.Transparent, SecureGreen, CyberCyan),
+                            colors = listOf(Color.Transparent, SecureGreen.copy(alpha = runningGlowAlpha), CyberCyan.copy(alpha = runningGlowAlpha)),
                             start = centerOffset,
                             end = Offset(centerOffset.x + maxRadius, centerOffset.y)
                         ),
@@ -259,7 +278,6 @@ fun DashboardRadarButton(
                         strokeWidth = 2.5.dp.toPx(),
                         cap = StrokeCap.Round
                     )
-
                     drawContext.canvas.restore()
                 }
 

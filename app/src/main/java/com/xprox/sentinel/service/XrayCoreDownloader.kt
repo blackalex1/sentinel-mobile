@@ -243,11 +243,19 @@ object XrayCoreDownloader {
                 xrayFile.setWritable(true, true)
                 xrayFile.setExecutable(true, true)
                 
-                // Harden permissions/readable for database assets
+                // Harden permissions/readable for database assets extracted from zip
                 val geoip = File(binDir, "geoip.dat")
                 if (geoip.exists()) geoip.setReadable(true, true)
                 val geosite = File(binDir, "geosite.dat")
                 if (geosite.exists()) geosite.setReadable(true, true)
+
+                // Also fetch the full latest community databases with 1500+ categories
+                try {
+                    Log.i(TAG, "Fetching latest full community databases (v2fly dlc.dat)...")
+                    downloadDatabasesOnly(context, version) { /* background update */ }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Optional community database update skipped: ${e.message}")
+                }
                 
                 // Persist the installed version
                 setInstalledVersion(context, version)

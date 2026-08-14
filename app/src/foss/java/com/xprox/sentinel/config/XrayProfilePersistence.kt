@@ -590,5 +590,58 @@ object XrayProfilePersistence {
     fun loadCustomBlockRules(context: Context): List<String> {
         return loadStringList(context, KEY_CUSTOM_BLOCK_RULES, emptyList())
     }
+
+    // --- Global Routing Sniffing Settings ---
+    private const val KEY_SNIFFING_ENABLED = "sniffing_enabled"
+    private const val KEY_SNIFF_HTTP = "sniff_http"
+    private const val KEY_SNIFF_TLS = "sniff_tls"
+    private const val KEY_SNIFF_QUIC = "sniff_quic"
+    private const val KEY_SNIFF_ROUTE_ONLY = "sniff_route_only"
+
+    fun saveSniffingEnabled(context: Context, enabled: Boolean) {
+        getEncryptedPrefs(context).edit().putBoolean(KEY_SNIFFING_ENABLED, enabled).apply()
+        _updatesFlow.tryEmit(Unit)
+    }
+
+    fun loadSniffingEnabled(context: Context): Boolean {
+        return getEncryptedPrefs(context).getBoolean(KEY_SNIFFING_ENABLED, true)
+    }
+
+    fun saveSniffHttp(context: Context, enabled: Boolean) {
+        getEncryptedPrefs(context).edit().putBoolean(KEY_SNIFF_HTTP, enabled).apply()
+        _updatesFlow.tryEmit(Unit)
+    }
+
+    fun loadSniffHttp(context: Context): Boolean {
+        return getEncryptedPrefs(context).getBoolean(KEY_SNIFF_HTTP, true)
+    }
+
+    fun saveSniffTls(context: Context, enabled: Boolean) {
+        getEncryptedPrefs(context).edit().putBoolean(KEY_SNIFF_TLS, enabled).apply()
+        _updatesFlow.tryEmit(Unit)
+    }
+
+    fun loadSniffTls(context: Context): Boolean {
+        return getEncryptedPrefs(context).getBoolean(KEY_SNIFF_TLS, true)
+    }
+
+    fun saveSniffQuic(context: Context, enabled: Boolean) {
+        getEncryptedPrefs(context).edit().putBoolean(KEY_SNIFF_QUIC, enabled).apply()
+        _updatesFlow.tryEmit(Unit)
+    }
+
+    fun loadSniffQuic(context: Context): Boolean {
+        return getEncryptedPrefs(context).getBoolean(KEY_SNIFF_QUIC, true)
+    }
+
+    fun saveSniffRouteOnly(context: Context, enabled: Boolean) {
+        getEncryptedPrefs(context).edit().putBoolean(KEY_SNIFF_ROUTE_ONLY, enabled).apply()
+        _updatesFlow.tryEmit(Unit)
+    }
+
+    fun loadSniffRouteOnly(context: Context): Boolean {
+        return getEncryptedPrefs(context).getBoolean(KEY_SNIFF_ROUTE_ONLY, false)
+    }
 }
+
 

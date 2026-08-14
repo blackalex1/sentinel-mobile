@@ -1,6 +1,7 @@
 package com.xprox.sentinel.ui.screens.profiles
 
 import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -18,6 +19,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.xprox.sentinel.service.VpnManagerService
+import com.xprox.sentinel.config.XrayProfilePersistence
 import com.xprox.sentinel.data.LanguageManager
 import com.xprox.sentinel.theme.*
 import com.xprox.sentinel.ui.components.DoppelrandCard
@@ -67,6 +70,21 @@ fun SmartRoutingPanel(
     var enabledUs by remember { mutableStateOf(prefs.getBoolean("enabled_us", false)) }
     var enabledIpService by remember { mutableStateOf(prefs.getBoolean("enabled_ip_service", true)) }
 
+    var sniffingEnabled by remember { mutableStateOf(XrayProfilePersistence.loadSniffingEnabled(context)) }
+    var sniffHttp by remember { mutableStateOf(XrayProfilePersistence.loadSniffHttp(context)) }
+    var sniffTls by remember { mutableStateOf(XrayProfilePersistence.loadSniffTls(context)) }
+    var sniffQuic by remember { mutableStateOf(XrayProfilePersistence.loadSniffQuic(context)) }
+    var sniffRouteOnly by remember { mutableStateOf(XrayProfilePersistence.loadSniffRouteOnly(context)) }
+
+    fun notifyReload() {
+        if (VpnManagerService.isRunningFlow.value) {
+            val intent = Intent(context, VpnManagerService::class.java).apply {
+                action = VpnManagerService.ACTION_RELOAD_CONFIG
+            }
+            context.startService(intent)
+        }
+    }
+
     fun saveAction(key: String, action: QuickAction) {
         prefs.edit().putString(key, action.name).apply()
     }
@@ -91,6 +109,173 @@ fun SmartRoutingPanel(
                 fontFamily = FontFamily.Monospace,
                 letterSpacing = 1.sp
             )
+        }
+
+        // Global Routing Sniffing Card
+        item {
+            DoppelrandCard(
+                modifier = Modifier.fillMaxWidth(),
+                borderColor = if (sniffingEnabled) ElectricViolet.copy(alpha = 0.45f) else DoppelrandShellBorder,
+                glowColor = if (sniffingEnabled) ElectricViolet else null,
+                contentPadding = PaddingValues(16.dp)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Surface(
+                                color = ElectricViolet.copy(alpha = 0.15f),
+                                shape = RoundedCornerShape(100.dp),
+                                border = BorderStroke(1.dp, ElectricViolet.copy(alpha = 0.35f))
+                            ) {
+                                Text(
+                                    text = "GLOBAL INBOUND SNIFFING",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = ElectricViolet,
+                                    fontFamily = FontFamily.Monospace,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = if (isRu) "Сниффинг маршрутизации (Global Sniffing)" else "Global Routing Sniffing",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextWhite
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = if (isRu) "Глобальный извлекатель доменов (SNI/Host) для ВСЕХ входящих подключений (TUN, SOCKS5, Hotspot)" else "Sniffs domains (SNI/Host) globally for ALL inbounds (TUN, SOCKS5, Hotspot)",
+                                fontSize = 11.sp,
+                                color = TextGray,
+                                lineHeight = 15.sp
+                            )
+                        }
+                        Switch(
+                            checked = sniffingEnabled,
+                            onCheckedChange = {
+                                sniffingEnabled = it
+                                XrayProfilePersistence.saveSniffingEnabled(context, it)
+                                notifyReload()
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = ElectricViolet,
+                                checkedTrackColor = ElectricViolet.copy(alpha = 0.4f),
+                                uncheckedThumbColor = TextGray,
+                                uncheckedTrackColor = CardBorder
+                            )
+                        )
+                    }
+
+                    if (sniffingEnabled) {
+                        Spacer(modifier = Modifier.height(14.dp))
+                        HorizontalDivider(color = CardBorder.copy(alpha = 0.5f))
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            text = if (isRu) "ПРОТОКОЛЫ ПЕРЕХВАТА:" else "INTERCEPT PROTOCOLS:",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = ElectricViolet,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(text = "HTTP (Host)", fontSize = 12.sp, color = TextWhite)
+                            Checkbox(
+                                checked = sniffHttp,
+                                onCheckedChange = {
+                                    sniffHttp = it
+                                    XrayProfilePersistence.saveSniffHttp(context, it)
+                                    notifyReload()
+                                },
+                                colors = CheckboxDefaults.colors(checkedColor = ElectricViolet)
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(text = "TLS (HTTPS SNI)", fontSize = 12.sp, color = TextWhite)
+                            Checkbox(
+                                checked = sniffTls,
+                                onCheckedChange = {
+                                    sniffTls = it
+                                    XrayProfilePersistence.saveSniffTls(context, it)
+                                    notifyReload()
+                                },
+                                colors = CheckboxDefaults.colors(checkedColor = ElectricViolet)
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(text = "QUIC (HTTP/3)", fontSize = 12.sp, color = TextWhite)
+                            Checkbox(
+                                checked = sniffQuic,
+                                onCheckedChange = {
+                                    sniffQuic = it
+                                    XrayProfilePersistence.saveSniffQuic(context, it)
+                                    notifyReload()
+                                },
+                                colors = CheckboxDefaults.colors(checkedColor = ElectricViolet)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        HorizontalDivider(color = CardBorder.copy(alpha = 0.5f))
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text(
+                                    text = if (isRu) "Только для маршрутизации (Route Only)" else "Route Only Mode",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = TextWhite
+                                )
+                                Text(
+                                    text = if (isRu) "Не перезаписывает целевой IP-адрес клиента" else "Does not override client destination IP",
+                                    fontSize = 10.5.sp,
+                                    color = TextGray
+                                )
+                            }
+                            Switch(
+                                checked = sniffRouteOnly,
+                                onCheckedChange = {
+                                    sniffRouteOnly = it
+                                    XrayProfilePersistence.saveSniffRouteOnly(context, it)
+                                    notifyReload()
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = ElectricViolet,
+                                    checkedTrackColor = ElectricViolet.copy(alpha = 0.4f),
+                                    uncheckedThumbColor = TextGray,
+                                    uncheckedTrackColor = CardBorder
+                                )
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         // Rule 1: BitTorrent трафик
@@ -186,8 +371,8 @@ fun SmartRoutingPanel(
         item {
             QuickSecurityRuleCard(
                 title = if (isRu) "Сервисы определения IP" else "IP Checkers & Detectors",
-                description = if (isRu) "2ip, ipify, ifconfig, ipinfo, whoer, browserleaks и др." else "2ip, ipify, ifconfig, whoer, browserleaks, 45+ checkers",
-                badgeText = "45+ DETECTORS SPEC",
+                description = if (isRu) "ifconfig, ipwho.is, 2ip, ipify, whoer, browserleaks" else "ifconfig, ipwho.is, 2ip, ipify, whoer, browserleaks",
+                badgeText = "IP CHECKERS",
                 isChecked = enabledIpService,
                 action = actionIpService,
                 onCheckedChange = {

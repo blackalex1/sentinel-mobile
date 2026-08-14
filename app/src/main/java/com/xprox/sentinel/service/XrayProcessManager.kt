@@ -4,29 +4,31 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
-import java.io.File
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.channels.BufferOverflow
+import java.io.File
 
-/**
- * Handles secure execution and subprocess lifecycle
- * of the official XTLS Xray-core binary compiled for Android.
- */
 object XrayProcessManager {
     private const val TAG = "XrayProcessManager"
     private const val BINARY_NAME = "xray"
-    
+    private const val MAX_CONSECUTIVE_RESTARTS = 3
+
+    @Volatile
     private var xrayProcess: Process? = null
+    
+    @Volatile
+    var lastStartTime: Long = 0L
+        private set
+
+    @Volatile
+    var consecutiveFailures: Int = 0
+        private set
 
     @Volatile
     var lastPortBindFailed: Boolean = false
         private set
-
-    private var consecutiveFailures: Int = 0
-    private var lastStartTime: Long = 0L
-    private const val MAX_CONSECUTIVE_RESTARTS = 5
 
     private val _xrayLogFlow = MutableSharedFlow<String>(
         replay = 100,
@@ -36,18 +38,24 @@ object XrayProcessManager {
     val xrayLogFlow: SharedFlow<String> = _xrayLogFlow.asSharedFlow()
 
     /**
-     * Terminate any lingering native xray binary subprocesses under our app's UID.
+     * Terminate any lingering native xray binary subprocesses under our app's UID SYNCHRONOUSLY
+     * before a new process is created, preventing race conditions.
      */
-    fun killExistingXrayProcesses() {
-        try {
-            Runtime.getRuntime().exec(arrayOf("pkill", "-9", "xray")).waitFor()
-            Log.i(TAG, "Executed pkill -9 xray to clean up lingering processes")
-        } catch (e: Exception) {
-            // Ignore if pkill tool is missing or unexecutable
+    fun killExistingXrayProcessesSync() {
+        val p = xrayProcess
+        xrayProcess = null
+        p?.let {
+            try {
+                it.destroyForcibly()
+                it.waitFor()
+            } catch (e: Exception) {}
         }
         try {
-            Thread.sleep(100)
-        } catch (e: Exception) {}
+            Runtime.getRuntime().exec(arrayOf("pkill", "-9", "xray")).waitFor()
+            Log.i(TAG, "Executed pkill -9 xray synchronously before starting core")
+        } catch (e: Exception) {
+            // Ignore if unexecutable
+        }
     }
 
     /**
@@ -66,10 +74,8 @@ object XrayProcessManager {
      */
     @Synchronized
     fun startProcess(context: Context, configFilePath: String, tunFd: Int? = null): Boolean {
-        killExistingXrayProcesses()
-        if (xrayProcess != null) {
-            stopProcess()
-        }
+        // Clean up lingering processes SYNCHRONOUSLY first before spawning the new process
+        killExistingXrayProcessesSync()
 
         lastPortBindFailed = false
         val startTime = System.currentTimeMillis()
@@ -77,7 +83,7 @@ object XrayProcessManager {
 
         val binDir = File(context.filesDir, "bin")
         val xrayFile = File(binDir, BINARY_NAME)
-        
+
         if (!xrayFile.exists()) {
             Log.e(TAG, "Xray-core binary not found. Cannot start process.")
             return false
@@ -129,14 +135,14 @@ object XrayProcessManager {
                 Log.e(TAG, "Failed to reset xray.log", e)
             }
 
-            xrayProcess = builder.start()
+            val proc = builder.start()
+            xrayProcess = proc
 
             // Monitor process log outputs on a background thread
             Thread {
                 try {
-                    val p = xrayProcess
-                    val reader = p?.inputStream?.bufferedReader()
-                    reader?.forEachLine { line ->
+                    val reader = proc.inputStream.bufferedReader()
+                    reader.forEachLine { line ->
                         Log.d("XrayCoreProcess", line)
                         if (line.contains("bind: address already in use") || line.contains("failed to listen TCP")) {
                             Log.w(TAG, "Detected Xray port binding failure in log output: $line")
@@ -155,12 +161,12 @@ object XrayProcessManager {
                         // Emit line to flow
                         _xrayLogFlow.tryEmit(line)
                     }
-                    val exitVal = p?.waitFor()
+                    val exitVal = proc.waitFor()
                     val runDuration = System.currentTimeMillis() - startTime
                     Log.i(TAG, "Xray process exited with code $exitVal (duration: ${runDuration}ms)")
                     
                     synchronized(XrayProcessManager) {
-                        if (xrayProcess != null && xrayProcess == p) {
+                        if (xrayProcess != null && xrayProcess == proc) {
                             xrayProcess = null
                             
                             if (runDuration > 5000L) {
@@ -208,46 +214,42 @@ object XrayProcessManager {
     }
 
     /**
-     * Terminate the running Xray subprocess.
+     * Terminate the running Xray subprocess asynchronously off the main UI thread.
+     * Target strictly the tracked process instance so it never kills newly starting processes.
      */
-    @Synchronized
     fun stopProcess() {
         consecutiveFailures = 0
-        xrayProcess?.let {
-            Log.i(TAG, "Terminating running Xray native subprocess")
-            it.destroy()
+        val p = synchronized(this) {
+            val proc = xrayProcess
+            xrayProcess = null
+            proc
+        }
+
+        if (p == null) return
+
+        Thread {
             try {
+                Log.i(TAG, "Terminating running Xray native subprocess instance asynchronously")
+                p.destroyForcibly()
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    val terminated = it.waitFor(500, java.util.concurrent.TimeUnit.MILLISECONDS)
-                    if (!terminated) {
-                        Log.w(TAG, "Process did not exit after 500ms, destroying forcibly")
-                        it.destroyForcibly()
-                        it.waitFor(500, java.util.concurrent.TimeUnit.MILLISECONDS)
-                    }
+                    p.waitFor(300, java.util.concurrent.TimeUnit.MILLISECONDS)
                 } else {
-                    it.waitFor()
+                    p.waitFor()
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error waiting for process to terminate", e)
             }
-            xrayProcess = null
-            
-            // Yield to let OS release socket bindings and prevent EADDRINUSE collisions
-            try {
-                Thread.sleep(200)
-            } catch (e: Exception) {}
-        }
-        killExistingXrayProcesses()
 
-        // Restore parent stdin (FD 0) to release reference to the TUN interface
-        try {
-            val devNull = android.system.Os.open("/dev/null", android.system.OsConstants.O_RDONLY, 0)
-            android.system.Os.dup2(devNull, 0)
-            android.system.Os.close(devNull)
-            Log.i(TAG, "Successfully redirected parent stdin (FD 0) back to /dev/null to release TUN FD reference")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to redirect parent stdin back to /dev/null", e)
-        }
+            // Restore parent stdin (FD 0) asynchronously
+            try {
+                val devNull = android.system.Os.open("/dev/null", android.system.OsConstants.O_RDONLY, 0)
+                android.system.Os.dup2(devNull, 0)
+                android.system.Os.close(devNull)
+                Log.i(TAG, "Successfully redirected parent stdin (FD 0) back to /dev/null to release TUN FD reference")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to redirect parent stdin back to /dev/null", e)
+            }
+        }.start()
     }
 
     fun getXrayLogs(context: Context): List<String> {
