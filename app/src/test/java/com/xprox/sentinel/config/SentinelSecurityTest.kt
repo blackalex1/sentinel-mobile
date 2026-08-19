@@ -2,8 +2,6 @@ package com.xprox.sentinel.config
 
 import com.xprox.sentinel.config.XrayConfigManager.LocalProxyCredentials
 import com.xprox.sentinel.config.XrayConfigManager.ServerProfile
-import com.xprox.sentinel.config.builder.InboundConfigBuilder
-import com.xprox.sentinel.config.builder.OutboundConfigBuilder
 import com.xprox.sentinel.service.ThreatDetectionManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull

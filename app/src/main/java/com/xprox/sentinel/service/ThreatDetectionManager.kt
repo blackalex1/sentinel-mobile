@@ -4,9 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.xprox.sentinel.config.XrayProfilePersistence
+import com.xprox.sentinel.core.SentinelCore
+import com.xprox.sentinel.core.models.AndroidAuditRequest
 import com.xprox.sentinel.log.LogManager
 import java.io.File
-import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,10 +37,9 @@ object ThreatDetectionManager {
         return false
     }
 
-    private const val WINDOW_MS = 60000L // 1-minute sliding window
-    const val THRESHOLD = 2      // Max 2 requests allowed per minute
+    const val THRESHOLD = 2 // Max 2 requests allowed per minute for non-web ports
 
-    // Active package connection timestamps for sliding window
+    // Connection attempts record map
     private val connectionAttempts = ConcurrentHashMap<String, MutableList<ConnectionRecord>>()
 
     // In-memory set of actively blocked applications
@@ -77,7 +77,12 @@ object ThreatDetectionManager {
             blockedApps.clear()
             blockedApps.addAll(saved)
             _blockedAppsFlow.value = blockedApps.toList()
-            Log.i(TAG, "Initialized and loaded ${blockedApps.size} blackholed applications from persistence")
+
+            // Sync into Sentinel-Core native engine
+            saved.forEach { pkg ->
+                SentinelCore.blockApp(context, pkg)
+            }
+            Log.i(TAG, "Initialized and loaded ${blockedApps.size} blackholed applications into native core")
 
             val savedSystem = XrayProfilePersistence.loadFlaggedSystemApps(context)
             flaggedSystemApps.clear()
@@ -93,7 +98,7 @@ object ThreatDetectionManager {
      * Checks if an application is actively blackholed.
      */
     fun isAppBlocked(packageName: String): Boolean {
-        return blockedApps.contains(packageName)
+        return blockedApps.contains(packageName) || SentinelCore.isAppBlocked(null, packageName)
     }
 
     /**
@@ -108,12 +113,13 @@ object ThreatDetectionManager {
      */
     fun blockApp(context: Context, packageName: String) {
         if (packageName == context.packageName) return // Prevent self-block deadlock
-        
+
         if (blockedApps.add(packageName)) {
+            SentinelCore.blockApp(context, packageName)
             XrayProfilePersistence.saveBlockedApps(context, blockedApps)
             _blockedAppsFlow.value = blockedApps.toList()
             Log.w(TAG, "Application manually blocked: $packageName")
-            
+
             // Trigger VPN/Xray configuration update
             triggerVpnRebuild(context)
         }
@@ -124,8 +130,8 @@ object ThreatDetectionManager {
      */
     fun unblockApp(context: Context, packageName: String) {
         if (blockedApps.remove(packageName)) {
+            SentinelCore.unblockApp(context, packageName)
             XrayProfilePersistence.saveBlockedApps(context, blockedApps)
-            connectionAttempts.remove(packageName)
             blockedDestinations.clear() // Clear Xray destination blocks
             blockedPorts.clear()        // Clear Xray port blocks
             // Remove throttled log times matching this package
@@ -133,7 +139,7 @@ object ThreatDetectionManager {
             keysToRemove.forEach { lastLogTimes.remove(it) }
             _blockedAppsFlow.value = blockedApps.toList()
             Log.i(TAG, "Application unblocked and cleared counters: $packageName")
-            
+
             // Delete dynamic threat forensic files to keep disk clean
             ThreatForensics.deleteThreatReport(context, packageName)
 
@@ -149,14 +155,13 @@ object ThreatDetectionManager {
         if (flaggedSystemApps.remove(packageName)) {
             XrayProfilePersistence.saveFlaggedSystemApps(context, flaggedSystemApps)
             triggerTimes.remove(packageName)
-            connectionAttempts.remove(packageName)
             _flaggedSystemAppsFlow.value = flaggedSystemApps.toList()
             Log.i(TAG, "Flagged system app warning dismissed from UI: $packageName")
         }
     }
 
     /**
-     * Intercepts connection attempts and registers them.
+     * Intercepts connection attempts and audits them via Sentinel-Core native engine.
      * Returns true if the connection belongs to a blocked application or has just triggered a block.
      */
     fun registerConnectionAttempt(
@@ -180,20 +185,51 @@ object ThreatDetectionManager {
             return false
         }
 
-        val resolvedBytes = rawBytes ?: PacketForensics.synthesizePacket(protocol, destinationIp, port)
+        // Active audit ports from user preferences (if empty, audits all non-web ports)
+        val activePorts = LogManager.loadActivePorts(context).toList()
 
-        // If flagged system app, write to pcap and return early if within the active 5-minute capture window
-        // This prevents threshold checks and notification spam during the capture
-        if (flaggedSystemApps.contains(packageName)) {
-            val triggerTime = triggerTimes[packageName]
-            if (triggerTime != null && System.currentTimeMillis() - triggerTime <= 300000L) {
-                PacketForensics.writePacketToPcap(context, packageName, resolvedBytes, System.currentTimeMillis())
-                return false
-            }
+        val req = AndroidAuditRequest(
+            packageName = packageName,
+            appName = appName,
+            destinationIp = destinationIp,
+            port = port,
+            protocol = protocol,
+            ipLength = ipLength,
+            ttl = ttl,
+            ipFlags = ipFlags,
+            tcpFlags = tcpFlags,
+            tcpSeq = tcpSeq,
+            tcpAck = tcpAck,
+            tcpWindow = tcpWindow,
+            auditPorts = if (activePorts.isNotEmpty()) activePorts else null,
+            maxThreshold = THRESHOLD
+        )
+
+        val record = ConnectionRecord(
+            timestamp = System.currentTimeMillis(),
+            destinationIp = destinationIp,
+            port = port,
+            protocol = protocol,
+            ipLength = ipLength,
+            ttl = ttl,
+            ipFlags = ipFlags,
+            tcpFlags = tcpFlags,
+            tcpSeq = tcpSeq,
+            tcpAck = tcpAck,
+            tcpWindow = tcpWindow,
+            rawBytes = rawBytes
+        )
+        val attempts = connectionAttempts.getOrPut(packageName) { java.util.Collections.synchronizedList(mutableListOf()) }
+        synchronized(attempts) {
+            attempts.removeAll { it.timestamp < System.currentTimeMillis() - 60000L }
+            attempts.add(record)
         }
 
-        // 1. If already blackholed, write to isolated log, write to pcap if in window, and drop immediately (FOR ALL PORTS!)
-        if (isAppBlocked(packageName)) {
+        // Native Sentinel-Core audit call
+        val verdict = SentinelCore.auditConnection(context, req)
+
+        // 1. If actively blackholed, log blocked traffic and drop
+        if (verdict.isBlocked && !verdict.shouldBlock) {
             val isStandardDnsOrWeb = port == 53 || port == 80 || port == 443 || port == 853 ||
                 destinationIp == "8.8.8.8" || destinationIp == "8.8.4.4" ||
                 destinationIp == "1.1.1.1" || destinationIp == "1.0.0.1" ||
@@ -203,7 +239,7 @@ object ThreatDetectionManager {
                 blockedDestinations.add(destinationIp)
                 blockedPorts.add(port)
             }
-            
+
             val logKey = "$packageName:$destinationIp:$port"
             val lastTime = lastLogTimes[logKey] ?: 0L
             val currentTime = System.currentTimeMillis()
@@ -216,137 +252,159 @@ object ThreatDetectionManager {
                     tcpAck = tcpAck, tcpWindow = tcpWindow
                 )
             }
-            
+
             // Append blocked packet to PCAP if within 5-minute capture window
             val triggerTime = triggerTimes[packageName]
             if (triggerTime != null && System.currentTimeMillis() - triggerTime <= 300000L) {
-                PacketForensics.writePacketToPcap(context, packageName, resolvedBytes, System.currentTimeMillis())
+                PacketForensics.writeTcpPayloadToPcap(
+                    context = context,
+                    packageName = packageName,
+                    srcIp = "10.0.0.2",
+                    srcPort = 0,
+                    dstIp = destinationIp,
+                    dstPort = port,
+                    seq = tcpSeq,
+                    ack = tcpAck,
+                    flags = 0x18.toByte(),
+                    payload = rawBytes ?: ByteArray(0),
+                    timestampMs = System.currentTimeMillis()
+                )
             }
-            
+
             return true
         }
 
-        // 2. Dynamic Audit Ports check: Only monitor ports explicitly enabled in user settings
-        val activePorts = LogManager.loadActivePorts(context)
-        if (!activePorts.contains(port)) {
-            return false
-        }
+        // 2. Suspicious System App Trigger (Bypasses blackhole to prevent OS freeze)
+        if (verdict.isSystemFlagged) {
+            Log.w(TAG, "SUSPICIOUS SYSTEM ACTIVITY! System App $appName ($packageName) flagged by native engine. Isolation bypassed.")
 
-        // 3. Sliding Window Cooldown Calculation (1 minute)
-        val currentTime = System.currentTimeMillis()
-        val attempts = connectionAttempts.getOrPut(packageName) { Collections.synchronizedList(mutableListOf()) }
+            val triggerTime = System.currentTimeMillis()
+            triggerTimes[packageName] = triggerTime
 
-        synchronized(attempts) {
-            // Remove attempts older than 1 minute
-            attempts.removeAll { it.timestamp < currentTime - WINDOW_MS }
+            val isNewlyFlagged = flaggedSystemApps.add(packageName)
+            if (isNewlyFlagged) {
+                XrayProfilePersistence.saveFlaggedSystemApps(context, flaggedSystemApps)
+                _flaggedSystemAppsFlow.value = flaggedSystemApps.toList()
+            }
 
-            // Register current connection attempt
-            attempts.add(
+            val records = listOf(
                 ConnectionRecord(
-                    currentTime, destinationIp, port,
-                    protocol = protocol, ipLength = ipLength, ttl = ttl,
-                    ipFlags = ipFlags, tcpFlags = tcpFlags, tcpSeq = tcpSeq,
-                    tcpAck = tcpAck, tcpWindow = tcpWindow,
-                    rawBytes = resolvedBytes
+                    timestamp = triggerTime,
+                    destinationIp = destinationIp,
+                    port = port,
+                    protocol = protocol,
+                    ipLength = ipLength,
+                    ttl = ttl,
+                    ipFlags = ipFlags,
+                    tcpFlags = tcpFlags,
+                    tcpSeq = tcpSeq,
+                    tcpAck = tcpAck,
+                    tcpWindow = tcpWindow,
+                    rawBytes = rawBytes
                 )
             )
 
-            // 4. Check Threat Threshold
-            val isStandardWebPort = port == 80 || port == 443 || port == 53
-            if (attempts.size > THRESHOLD && !isStandardWebPort) {
-                // Determine if this is a critical system/kernel package
-                val isSystemPackage = packageName == "android.system.kernel" || 
-                                     packageName.startsWith("android.system.") || 
-                                     packageName.startsWith("android.uid.") || 
-                                     packageName == "android" ||
-                                     packageName.startsWith("unknown.uid.")
+            ThreatForensics.generateForensicReport(context, packageName, appName, destinationIp, port, records, isSystemBypassed = true)
 
-                if (isSystemPackage) {
-                    Log.w(TAG, "SUSPICIOUS SYSTEM ACTIVITY! System App $appName ($packageName) made ${attempts.size} requests to port $port within 1 minute. Isolation bypassed to prevent system lockout.")
-                    
-                    val triggerTime = System.currentTimeMillis()
-                    triggerTimes[packageName] = triggerTime
-
-                    // Add to flagged system apps for UI display
-                    val isNewlyFlagged = flaggedSystemApps.add(packageName)
-                    if (isNewlyFlagged) {
-                        XrayProfilePersistence.saveFlaggedSystemApps(context, flaggedSystemApps)
-                        _flaggedSystemAppsFlow.value = flaggedSystemApps.toList()
-                    }
-
-                    // Generate special forensic report for system package
-                    ThreatForensics.generateForensicReport(context, packageName, appName, destinationIp, port, attempts.toList(), isSystemBypassed = true)
-                    
-                    // Write all buffered pre-trigger packet bytes and trigger packet bytes to PCAP file!
-                    try {
-                        val pcapFile = File(File(context.filesDir, "threats"), "report_${packageName}.pcap")
-                        if (isNewlyFlagged) {
-                            pcapFile.delete()
-                        }
-                        attempts.forEach { record ->
-                            val bytes = record.rawBytes ?: PacketForensics.synthesizePacket(record.protocol, record.destinationIp, record.port)
-                            PacketForensics.writePacketToPcap(context, packageName, bytes, record.timestamp)
-                        }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed to write system trigger flow to PCAP", e)
-                    }
-
-                    // Post system-alert notification warning about system app compromise
-                    ThreatNotificationHelper.showSystemSecurityAlertNotification(context, appName, packageName, port)
-                    
-                    return false // Do NOT block, allow connection
-                } else {
-                    Log.e(TAG, "THREAT DETECTED! App $appName ($packageName) made ${attempts.size} requests to port $port within 1 minute.")
-                    
-                    // Store the trigger time first
-                    val triggerTime = System.currentTimeMillis()
-                    triggerTimes[packageName] = triggerTime
-
-                    // Trigger instant blackhole
-                    blockedApps.add(packageName)
-                    val isStandardDnsOrWeb = port == 53 || port == 80 || port == 443 || port == 853 ||
-                        destinationIp == "8.8.8.8" || destinationIp == "8.8.4.4" ||
-                        destinationIp == "1.1.1.1" || destinationIp == "1.0.0.1" ||
-                        destinationIp.startsWith("2001:4860:") || destinationIp.startsWith("2606:4700:") ||
-                        destinationIp == "127.0.0.1" || destinationIp == "localhost"
-                    if (!isStandardDnsOrWeb) {
-                        blockedDestinations.add(destinationIp)
-                        blockedPorts.add(port)
-                    }
-                    XrayProfilePersistence.saveBlockedApps(context, blockedApps)
-                    _blockedAppsFlow.value = blockedApps.toList()
-
-                    // Generate forensic reports and threat analysis files passing all pre-trigger attempts
-                    ThreatForensics.generateForensicReport(context, packageName, appName, destinationIp, port, attempts.toList(), isSystemBypassed = false)
-
-                    // Write the trigger log entry in the isolated threat log
-                    ThreatForensics.logBlockedTraffic(
-                        context, packageName, appName, destinationIp, port, isTrigger = true,
-                        protocol = protocol, ipLength = ipLength, ttl = ttl,
-                        ipFlags = ipFlags, tcpFlags = tcpFlags, tcpSeq = tcpSeq,
-                        tcpAck = tcpAck, tcpWindow = tcpWindow
-                    )
-
-                    // Write all buffered pre-trigger packet bytes and trigger packet bytes to PCAP file!
-                    try {
-                        File(File(context.filesDir, "threats"), "report_${packageName}.pcap").delete()
-                        attempts.forEach { record ->
-                            val bytes = record.rawBytes ?: PacketForensics.synthesizePacket(record.protocol, record.destinationIp, record.port)
-                            PacketForensics.writePacketToPcap(context, packageName, bytes, record.timestamp)
-                        }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed to write trigger flow to PCAP", e)
-                    }
-
-                    // Post high-priority security alert system notification
-                    ThreatNotificationHelper.showSecurityAlertNotification(context, appName, packageName)
-
-                    // Re-compile VPN routing / Xray config to apply blacklist immediately
-                    triggerVpnRebuild(context)
-
-                    return true
+            // Write trigger flow to PCAP
+            try {
+                val pcapFile = File(File(context.filesDir, "threats"), "report_${packageName}.pcap")
+                if (isNewlyFlagged) {
+                    pcapFile.delete()
                 }
+                PacketForensics.writeTcpPayloadToPcap(
+                    context = context,
+                    packageName = packageName,
+                    srcIp = "10.0.0.2",
+                    srcPort = 0,
+                    dstIp = destinationIp,
+                    dstPort = port,
+                    seq = tcpSeq,
+                    ack = tcpAck,
+                    flags = 0x02.toByte(),
+                    payload = rawBytes ?: ByteArray(0),
+                    timestampMs = triggerTime
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to write system trigger flow to PCAP", e)
             }
+
+            ThreatNotificationHelper.showSystemSecurityAlertNotification(context, appName, packageName, port)
+            return false
+        }
+
+        // 3. User App Threat Breach -> Blackhole Quarantine
+        if (verdict.shouldBlock || verdict.action == "BLOCK") {
+            Log.e(TAG, "THREAT DETECTED by Sentinel-Core! App $appName ($packageName) triggered action: ${verdict.action}")
+
+            val triggerTime = System.currentTimeMillis()
+            triggerTimes[packageName] = triggerTime
+
+            blockedApps.add(packageName)
+            val isStandardDnsOrWeb = port == 53 || port == 80 || port == 443 || port == 853 ||
+                destinationIp == "8.8.8.8" || destinationIp == "8.8.4.4" ||
+                destinationIp == "1.1.1.1" || destinationIp == "1.0.0.1" ||
+                destinationIp.startsWith("2001:4860:") || destinationIp.startsWith("2606:4700:") ||
+                destinationIp == "127.0.0.1" || destinationIp == "localhost"
+            if (!isStandardDnsOrWeb) {
+                blockedDestinations.add(destinationIp)
+                blockedPorts.add(port)
+            }
+            XrayProfilePersistence.saveBlockedApps(context, blockedApps)
+            _blockedAppsFlow.value = blockedApps.toList()
+
+            val records = listOf(
+                ConnectionRecord(
+                    timestamp = triggerTime,
+                    destinationIp = destinationIp,
+                    port = port,
+                    protocol = protocol,
+                    ipLength = ipLength,
+                    ttl = ttl,
+                    ipFlags = ipFlags,
+                    tcpFlags = tcpFlags,
+                    tcpSeq = tcpSeq,
+                    tcpAck = tcpAck,
+                    tcpWindow = tcpWindow,
+                    rawBytes = rawBytes
+                )
+            )
+
+            // Generate forensic reports and threat analysis files
+            ThreatForensics.generateForensicReport(context, packageName, appName, destinationIp, port, records, isSystemBypassed = false)
+
+            ThreatForensics.logBlockedTraffic(
+                context, packageName, appName, destinationIp, port, isTrigger = true,
+                protocol = protocol, ipLength = ipLength, ttl = ttl,
+                ipFlags = ipFlags, tcpFlags = tcpFlags, tcpSeq = tcpSeq,
+                tcpAck = tcpAck, tcpWindow = tcpWindow
+            )
+
+            // Write trigger flow to PCAP
+            try {
+                File(File(context.filesDir, "threats"), "report_${packageName}.pcap").delete()
+                PacketForensics.writeTcpPayloadToPcap(
+                    context = context,
+                    packageName = packageName,
+                    srcIp = "10.0.0.2",
+                    srcPort = 0,
+                    dstIp = destinationIp,
+                    dstPort = port,
+                    seq = tcpSeq,
+                    ack = tcpAck,
+                    flags = 0x02.toByte(),
+                    payload = rawBytes ?: ByteArray(0),
+                    timestampMs = triggerTime
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to write trigger flow to PCAP", e)
+            }
+
+            ThreatNotificationHelper.showSecurityAlertNotification(context, appName, packageName)
+
+            // Rebuild VPN routing to enforce blackhole immediately
+            triggerVpnRebuild(context)
+            return true
         }
 
         return false

@@ -9,10 +9,12 @@ android {
     compileSdk = 36
     defaultConfig {
         applicationId = "com.xprox.sentinel"
+        applicationIdSuffix = ".next"
+        manifestPlaceholders["appName"] = "Sentinel Next"
         minSdk = 28
         targetSdk = 28
         versionCode = 2
-        versionName = "1.1"
+        versionName = "1.1-next"
     }
 
     buildTypes {
@@ -36,6 +38,9 @@ android {
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
+        unitTests.all {
+            it.systemProperty("jna.library.path", "${project.projectDir}/src/test/resources/win32-x86-64;${project.projectDir}/src/test/resources")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -100,4 +105,11 @@ dependencies {
 
   // Jetpack Security for EncryptedSharedPreferences
   implementation("androidx.security:security-crypto:1.1.0")
+
+  // JNA for Native Go Sentinel-Core C-FFI
+  implementation("net.java.dev.jna:jna:5.14.0@aar")
+  testImplementation("net.java.dev.jna:jna:5.14.0")
+
+  // Kotlinx Serialization JSON
+  implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 }

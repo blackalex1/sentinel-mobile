@@ -1,28 +1,30 @@
 package com.xprox.sentinel.config
 
 import android.content.Context
-import java.util.Base64
 import android.util.Log
+import com.xprox.sentinel.core.SentinelCore
+import com.xprox.sentinel.core.models.*
+import com.xprox.sentinel.core.toCoreProfile
 import java.io.File
 import java.security.SecureRandom
+import java.util.Base64
 import java.util.UUID
-import com.xprox.sentinel.config.builder.InboundConfigBuilder
-import com.xprox.sentinel.config.builder.OutboundConfigBuilder
 
 /**
- * Handles creation and manipulation of Xray config models.
- * Implements security compilation templates that defend against local SOCKS5 hijacking
- * using random dynamic ports and highly-secure random authorization tokens.
+ * Handles creation and manipulation of proxy server profiles and client configurations.
+ * Delegates parsing, outbounds, inbounds, DNS, and preset routing compilation to the
+ * high-performance Sentinel-Core Go engine.
  */
 object XrayConfigManager {
     private const val TAG = "XrayConfigManager"
     private const val SECURE_CONFIG_NAME = "secure_xray_config.json"
+
     data class ServerProfile(
         val id: String = UUID.randomUUID().toString(),
         val name: String,
         val address: String,
         val port: Int,
-        val type: String = "VLESS", // VLESS, VMess, Shadowsocks, Trojan
+        val type: String = "VLESS", // VLESS, VMess, Shadowsocks, Trojan, Hysteria2, Socks, Direct
         val uuid: String = "",
         val path: String = "",
         val security: String = "none",
@@ -67,7 +69,6 @@ object XrayConfigManager {
                 // Ignore and retry
             }
         }
-        // Fallback to high ephemeral range excluding any forbidden ports
         var fallback = (30000..65000).random()
         while (excludePorts.contains(fallback)) {
             fallback = (30000..65000).random()
@@ -82,7 +83,7 @@ object XrayConfigManager {
         val random = SecureRandom()
         val usernameBytes = ByteArray(12)
         val tokenBytes = ByteArray(24)
-        
+
         random.nextBytes(usernameBytes)
         random.nextBytes(tokenBytes)
 
@@ -99,17 +100,18 @@ object XrayConfigManager {
     }
 
     /**
-     * Compiles the secure Xray config, embedding loopback binding, custom geosite/geoip rules,
-     * and secure local SOCKS5 authentication with our random credentials.
+     * Compiles the secure client config using the Sentinel-Core Go engine.
+     * All routing presets (RU, torrents, ads, etc.) and security policies are compiled
+     * directly by Sentinel-Core as the single source of truth.
      */
     fun compileSecureConfig(
         context: Context,
         profile: ServerProfile,
         creds: LocalProxyCredentials,
-        allowedApps: List<String>,
-        blockedApps: List<String>,
-        geoipRules: List<String>, // e.g. ["geoip:private", "geoip:ru"]
-        geositeRules: List<String>, // e.g. ["geosite:google", "geosite:category-ads-all"]
+        allowedApps: List<String> = emptyList(),
+        blockedApps: List<String> = emptyList(),
+        geoipRules: List<String> = emptyList(),
+        geositeRules: List<String> = emptyList(),
         lanAuthEnabled: Boolean = false,
         lanCreds: LocalProxyCredentials? = null,
         tetheringIps: List<String> = emptyList(),
@@ -119,532 +121,215 @@ object XrayConfigManager {
     ): File {
         val configFile = File(context.filesDir, SECURE_CONFIG_NAME)
 
-        // If the profile contains a full raw JSON configuration (from VoxGate/Inki),
-        // we run it directly but inject our secure SOCKS5 loopback inbounds for leak protection.
+        // Handle raw JSON configuration if provided
         if (!profile.fullJsonConfig.isNullOrEmpty()) {
             try {
-                val jsonObject = org.json.JSONObject(profile.fullJsonConfig)
-                val inboundsListJson = InboundConfigBuilder.buildInboundsJson(
-                    context, creds, lanAuthEnabled, lanCreds, tetheringIps, lanHttpPort, lanSocksPort
-                )
-                val secureInboundsArray = org.json.JSONArray(inboundsListJson)
-                jsonObject.put("inbounds", secureInboundsArray)
-                
-                configFile.writeText(jsonObject.toString(), Charsets.UTF_8)
-                Log.d(TAG, "Secure JSON Xray config written dynamically with secure inbounds")
+                configFile.writeText(profile.fullJsonConfig, Charsets.UTF_8)
+                Log.d(TAG, "Raw JSON configuration written to config file")
                 return configFile
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to inject secure inbounds into raw JSON config, falling back to compile template", e)
+                Log.e(TAG, "Failed to write raw JSON config, continuing to compiler", e)
             }
         }
-        val inboundsJson = InboundConfigBuilder.buildInboundsJson(
-            context, creds, lanAuthEnabled, lanCreds, tetheringIps, lanHttpPort, lanSocksPort
+
+        // 1. Resolve target core
+        val isHysteria = profile.type.equals("HYSTERIA2", ignoreCase = true) || profile.type.equals("HY2", ignoreCase = true)
+        val targetCore = if (isHysteria) "singbox" else "xray"
+
+        val isLanSharingEnabled = XrayProfilePersistence.loadLanSharing(context)
+        val isLanHttp = XrayProfilePersistence.loadLanSharingHttp(context)
+        val isLanSocks = XrayProfilePersistence.loadLanSharingSocks(context)
+
+        // 2. Prepare Inbound configuration
+        val clientInbound = ClientInboundSpec(
+            mode = "mobile_vpn",
+            socksPort = creds.port,
+            authEnabled = true,
+            authUsername = creds.username,
+            authPassword = creds.token,
+            lanSharingEnabled = isLanSharingEnabled,
+            lanHttpPort = if (isLanHttp) lanHttpPort else 0,
+            lanSocksPort = if (isLanSocks) lanSocksPort else 0,
+            lanAuthEnabled = lanAuthEnabled,
+            lanUsername = lanCreds?.username,
+            lanPassword = lanCreds?.token
         )
-        val inboundsList = InboundConfigBuilder.buildInboundsList(context)
-        val dnsServers = XrayProfilePersistence.loadDnsServers(context)
-        val dnsServersJson = dnsServers.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }
 
-        // Compile dynamic blackhole rules for blocked applications
-        val blockedDests = com.xprox.sentinel.service.ThreatDetectionManager.getBlockedDestinations()
-        val blockedRuleJson = if (blockedDests.isNotEmpty()) {
-            val destsJson = blockedDests.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }
-            """
-            {
-              "type": "field",
-              "ip": $destsJson,
-              "outboundTag": "block"
-            },
-            {
-              "type": "field",
-              "domain": $destsJson,
-              "outboundTag": "block"
-            },
-            """.trimIndent().prependIndent("              ")
-        } else ""
+        val serverInbounds: List<ServerInboundSpec>? = null
 
-        // Compile dynamic port block rules for breached ports as a comma-separated string (Xray routing expects port to be a string or number, not an array)
-        val blockedPortsList = com.xprox.sentinel.service.ThreatDetectionManager.getBlockedPorts()
-        val blockedPortsRuleJson = if (blockedPortsList.isNotEmpty()) {
-            val portsJson = blockedPortsList.joinToString(separator = ",") { "$it" }
-            """
-            {
-              "type": "field",
-              "port": "$portsJson",
-              "outboundTag": "block"
-            },
-            """.trimIndent().prependIndent("              ")
-        } else ""
+        // 4. Assemble Routing rules and dynamic presets
+        val routingRules = mutableListOf<RoutingRule>()
 
-        // Compile dynamic capture proxy outbounds and rules for all active capturing/isolated packages
-        val captureRules = java.lang.StringBuilder()
-        val captureOutbounds = java.lang.StringBuilder()
+        // 4a. Dynamic threat isolation (blocked destinations and blocked ports)
+        val blockedDests = com.xprox.sentinel.service.ThreatDetectionManager.getBlockedDestinations().toList()
+        if (blockedDests.isNotEmpty()) {
+            val ips = blockedDests.filter { it.matches(Regex("^[0-9.]+$")) || it.contains(":") }
+            val domains = blockedDests.filter { !it.matches(Regex("^[0-9.]+$")) && !it.contains(":") }
+            if (ips.isNotEmpty()) {
+                routingRules.add(RoutingRule(action = "block", ips = ips))
+            }
+            if (domains.isNotEmpty()) {
+                routingRules.add(RoutingRule(action = "block", domains = domains))
+            }
+        }
+
+        val blockedPorts = com.xprox.sentinel.service.ThreatDetectionManager.getBlockedPorts().toList()
+        if (blockedPorts.isNotEmpty()) {
+            routingRules.add(RoutingRule(action = "block", ports = blockedPorts.map { it.toString() }))
+        }
+
+        // 4b. Blocked application user IDs (UIDs)
         val pm = context.packageManager
-        val currentTime = System.currentTimeMillis()
-
-        // Resolve system user IDs (UIDs) of all blocked applications for Zero-Trust kernel-level socket blocking
         val allBlockedApps = (blockedApps + com.xprox.sentinel.service.ThreatDetectionManager.getBlockedAppsList()).distinct()
         val blockedUids = mutableListOf<String>()
         for (pkg in allBlockedApps) {
             try {
-                if (pkg.isNotEmpty() && 
-                    pkg != "android.system.kernel" && 
-                    pkg != "hotspot.client" &&
-                    !pkg.startsWith("android.system.") && 
-                    !pkg.startsWith("android.uid.") && 
-                    !pkg.startsWith("unknown.uid.")
-                ) {
-                    val triggerTime = com.xprox.sentinel.service.ThreatDetectionManager.getTriggerTime(pkg)
-                    val isCapturing = captureProxyPort > 0 && triggerTime != null && (currentTime - triggerTime <= 300000L)
-                    
-                    if (isCapturing) {
-                        val uid = pm.getPackageUid(pkg, 0)
-                        val tag = "capture-outbound-$pkg"
-                        
-                        // Add routing rule
-                        captureRules.append("""
-                        {
-                          "type": "field",
-                          "user": ["$uid"],
-                          "outboundTag": "$tag"
-                        },
-                        """.trimIndent().prependIndent("              ")).append("\n")
-                        
-                        // Add SOCKS outbound
-                        captureOutbounds.append("""
-                        ,
-                        {
-                          "tag": "$tag",
-                          "protocol": "socks",
-                          "settings": {
-                            "servers": [
-                              {
-                                "address": "127.0.0.1",
-                                "port": $captureProxyPort,
-                                "users": [
-                                  {
-                                    "user": "$pkg",
-                                    "pass": "socks_token"
-                                  }
-                                ]
-                              }
-                            ]
-                          }
-                        }
-                        """.trimIndent().prependIndent("            "))
-                    } else {
-                        val uid = pm.getPackageUid(pkg, 0)
-                        blockedUids.add(uid.toString())
-                    }
+                if (pkg.isNotEmpty() && !pkg.startsWith("android.system.") && !pkg.startsWith("android.uid.")) {
+                    val uid = pm.getPackageUid(pkg, 0)
+                    blockedUids.add(uid.toString())
                 }
-            } catch (e: android.content.pm.PackageManager.NameNotFoundException) {
-                // Ignore virtual packages or uninstalled apps gracefully
-                Log.d(TAG, "Blocked app not installed or virtual package: $pkg")
-            } catch (e: Exception) {
-                Log.e(TAG, "Unexpected error getting UID for blocked app $pkg", e)
-            }
+            } catch (e: Exception) {}
+        }
+        if (blockedUids.isNotEmpty()) {
+            routingRules.add(RoutingRule(action = "block", packageUids = blockedUids))
         }
 
-        val blockedUidsRuleJson = if (blockedUids.isNotEmpty()) {
-            val uidsJson = blockedUids.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }
-            """
-            {
-              "type": "field",
-              "user": $uidsJson,
-              "outboundTag": "block"
-            },
-            """.trimIndent().prependIndent("              ")
-        } else ""
-
-        val isDirectMode = profile.type.uppercase() == "DIRECT"
-        val streamSettingsJson = if (isDirectMode) "{}" else OutboundConfigBuilder.buildStreamSettingsJson(profile)
-        val settingsJson = if (isDirectMode) "{}" else OutboundConfigBuilder.buildSettingsJson(profile)
-        val outboundProtocol = when {
-            isDirectMode -> "freedom"
-            profile.type.uppercase() == "HYSTERIA2" -> "hysteria"
-            else -> profile.type.lowercase()
-        }
-
-        // Smart Routing Configurations
-        val isBypassRu = XrayProfilePersistence.loadBypassRuSites(context)
-        val isBypassTorrents = XrayProfilePersistence.loadBypassTorrents(context)
-        val isBlockQuic = XrayProfilePersistence.loadBlockQuic(context)
-        val isBypassLan = XrayProfilePersistence.loadBypassLan(context)
-
+        // 4c. User Custom Overrides (Direct, Proxy, Block)
         val customDirect = XrayProfilePersistence.loadCustomDirectRules(context)
         val customProxy = XrayProfilePersistence.loadCustomProxyRules(context)
         val customBlock = XrayProfilePersistence.loadCustomBlockRules(context)
 
-        fun isIpRule(rule: String): Boolean {
-            val t = rule.trim().lowercase()
-            return t.startsWith("geoip:") || t.contains("/") || t.matches(Regex("^[0-9.]+$")) || t.matches(Regex("^[0-9a-f:]+$"))
+        fun splitDomainsAndIps(rules: List<String>): Pair<List<String>, List<String>> {
+            val domains = mutableListOf<String>()
+            val ips = mutableListOf<String>()
+            for (r in rules) {
+                val tr = r.trim()
+                if (tr.isEmpty()) continue
+                if (tr.startsWith("geoip:") || tr.contains("/") || tr.matches(Regex("^[0-9.]+$")) || tr.matches(Regex("^[0-9a-f:]+$"))) {
+                    ips.add(tr)
+                } else {
+                    domains.add(tr)
+                }
+            }
+            return Pair(domains, ips)
         }
 
-        val ruDomainsList = listOf(
-            "geosite:category-ru",
-            "geosite:tld-ru",
-            "geosite:category-gov-ru",
-            "geosite:category-bank-ru",
-            "geosite:category-ecommerce-ru",
-            "geosite:category-media-ru",
-            "geosite:category-retail-ru",
-            "geosite:category-entertainment-ru",
-            "geosite:category-education-ru",
-            "geosite:category-forums-ru",
-            "geosite:category-tech-media-ru",
-            "geosite:category-travel-ru",
-            "geosite:category-ai-ru",
-            "geosite:yandex",
-            "geosite:vk",
-            "geosite:mailru",
-            "geosite:mailru-group",
-            "geosite:rutube",
-            "geosite:autoru",
-            "geosite:regru",
-            "geosite:nic-ru",
-            "geosite:tbank-ru",
-            "geosite:mts-ru",
-            "geosite:t2-ru",
-            "domain:ru",
-            "domain:su",
-            "domain:xn--p1ai",
-            "telega.me", "2gis.com", "2gis.ru",
-            "47news.ru", "alfabank.ru", "auth-nsdi.ru", "auto.ru", "avito.ru", "avito.st", "cdn-vk.ru",
-            "cikrf.ru", "dzen.ru", "gazeta.ru", "gosuslugi.ru", "gov.ru", "government.ru", "gu-st.ru",
-            "izbirkom.ru", "kinopoisk.ru", "kp.ru", "kremlin.ru", "lemanapro.ru", "lenta.ru", "lmru.tech",
-            "mail.ru", "max.ru", "mradx.net", "ok.ru", "okcdn.ru", "oneme.ru", "ozon.ru", "ozone.ru",
-            "pochta.ru", "rambler.ru", "rbc.ru", "res-nsdi.ru", "rutube.ru", "rutubelist.ru", "rzd.ru",
-            "t2.ru", "taximaxim.ru", "tutu.ru", "userapi.com", "vk-portal.net", "vk.com", "vk.ru",
-            "vtb.ru", "wb.ru", "wildberries.ru", "ya.ru", "yandex.com", "yandex.net", "yandex.ru",
-            "yastatic.net", "mos.ru", "tbank.ru", "cdn-tinkoff.ru", "tinkoff.ru", "nalog.ru",
-            "sberbank.ru", "sber.ru", "megafon.ru", "mts.ru", "beeline.ru", "rostelecom.ru", "rt.ru"
-        )
-        val ruIpsList = listOf("geoip:ru")
-        val lanIpList = listOf(
-            "geoip:private",
-            "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16",
-            "172.16.0.0/12", "192.0.0.0/24", "192.0.2.0/24", "192.88.99.0/24", "192.168.0.0/16",
-            "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "224.0.0.0/3", "fc00::/7", "fe80::/10"
-        )
-        val torrentTrackers = listOf(
-            "geosite:rutracker",
-            "domain:bittorrent.com", "domain:utorrent.com", "domain:transmissionbt.com", "domain:vuze.com",
-            "domain:opentrackr.org", "domain:openbittorrent.com", "domain:publicbt.com", "domain:rarbg.com",
-            "domain:rutracker.org", "domain:rutor.is", "domain:opentor.org", "domain:nyaa.si"
-        )
+        if (customBlock.isNotEmpty()) {
+            val (d, i) = splitDomainsAndIps(customBlock)
+            routingRules.add(RoutingRule(action = "block", domains = d.ifEmpty { null }, ips = i.ifEmpty { null }))
+        }
+        if (customDirect.isNotEmpty()) {
+            val (d, i) = splitDomainsAndIps(customDirect)
+            routingRules.add(RoutingRule(action = "direct", domains = d.ifEmpty { null }, ips = i.ifEmpty { null }))
+        }
+        if (customProxy.isNotEmpty()) {
+            val (d, i) = splitDomainsAndIps(customProxy)
+            routingRules.add(RoutingRule(action = "proxy", domains = d.ifEmpty { null }, ips = i.ifEmpty { null }))
+        }
 
-        // Dynamic Quick Actions Preferences from SmartRoutingPanel & Custom Table Rules
+        // 4d. Presets from Sentinel-Core Builtin Single Source of Truth
         val quickPrefs = context.getSharedPreferences("sentinel_quick_actions_prefs", Context.MODE_PRIVATE)
-        var enabledIpService = quickPrefs.getBoolean("enabled_ip_service", true)
-        var actionIpService = quickPrefs.getString("action_ip_service", "VPN") ?: "VPN"
-        var enabledAds = quickPrefs.getBoolean("enabled_ads", false)
-        var actionAds = quickPrefs.getString("action_ads", "BLOCKED") ?: "BLOCKED"
-        var enabledCn = quickPrefs.getBoolean("enabled_cn", false)
-        var actionCn = quickPrefs.getString("action_cn", "BLOCKED") ?: "BLOCKED"
-        var enabledUs = quickPrefs.getBoolean("enabled_us", false)
-        var actionUs = quickPrefs.getString("action_us", "BLOCKED") ?: "BLOCKED"
+        val isBypassRu = XrayProfilePersistence.loadBypassRuSites(context)
+        val isBypassTorrents = XrayProfilePersistence.loadBypassTorrents(context)
+        val isBypassLan = XrayProfilePersistence.loadBypassLan(context)
 
-        // Honor user overrides from sentinel_routing_priority_prefs (СВОИ ПРАВИЛА)
-        val routingPriorityPrefs = context.getSharedPreferences("sentinel_routing_priority_prefs", Context.MODE_PRIVATE)
-        val tableRulesJson = routingPriorityPrefs.getString("table_rules_json", null)
-        if (!tableRulesJson.isNullOrEmpty()) {
-            try {
-                val arr = org.json.JSONArray(tableRulesJson)
-                for (i in 0 until arr.length()) {
-                    val obj = arr.getJSONObject(i)
-                    val id = obj.optString("id", "")
-                    val name = obj.optString("name", "")
-                    val act = obj.optString("action", "")
-                    val en = obj.optBoolean("enabled", true)
-
-                    if (id == "2" || name.contains("определения IP", ignoreCase = true) || name.contains("IP Services", ignoreCase = true)) {
-                        actionIpService = act
-                        enabledIpService = en
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to parse table_rules_json", e)
-            }
-        }
-
-        val ipCheckerDomains = listOf(
-            "domain:ipify.org", "domain:api.ipify.org", "domain:checkip.amazonaws.com", "domain:ifconfig.me", "domain:ifconfig.co", "domain:ifconfig.io",
-            "domain:telega.me", "domain:ipinfo.io", "domain:2ip.ru", "domain:2ip.io", "domain:2ip.ua", "domain:2ip.me",
-            "domain:myip.ru", "domain:myip.com", "domain:icanhazip.com", "domain:wtfismyip.com", "domain:ip.sb",
-            "domain:ipapi.co", "domain:ip-api.com", "domain:ipapi.com", "domain:db-ip.com", "domain:whoer.net",
-            "domain:ipwhois.io", "domain:ipwho.is", "domain:ipaddress.my", "domain:ipaddress.com", "domain:check-host.net",
-            "domain:browserleaks.com", "domain:ip2location.com", "domain:ip2location.io", "domain:showmyip.com",
-            "domain:whatsmyip.org", "domain:whatismyip.com", "domain:whatsmyipaddress.com", "domain:whatismyipaddress.com",
-            "domain:dnsleaktest.com", "domain:ipleak.net", "domain:ip.me", "domain:ip.cn", "domain:ip138.com",
-            "domain:ident.me", "domain:curlmyip.org", "domain:eth0.me", "domain:myexternalip.com", "domain:ip.nf",
-            "domain:trackip.net", "domain:checkip.dyndns.org",
-            "keyword:ipify", "keyword:2ip", "keyword:ipwhois", "keyword:icanhazip", "keyword:ifconfig", "keyword:checkip", "keyword:browserleaks", "keyword:whoer", "keyword:ipleak"
-        )
-        val ipCheckerIps = listOf("1.1.1.1/32", "1.0.0.1/32")
-
-        // Combine Direct Domains & IPs
-        val directDomains = mutableListOf<String>()
-        val directIps = mutableListOf<String>()
-        if (isBypassRu) {
-            ruDomainsList.forEach { if (isIpRule(it)) directIps.add(it) else directDomains.add(it) }
-            directIps.addAll(ruIpsList)
-        }
-        if (isBypassTorrents) {
-            torrentTrackers.forEach { if (isIpRule(it)) directIps.add(it) else directDomains.add(it) }
-        }
+        // Private LAN isolation
         if (isBypassLan) {
-            lanIpList.forEach { if (isIpRule(it)) directIps.add(it) else directDomains.add(it) }
-            directDomains.addAll(listOf("domain:local", "keyword:.local", "keyword:.lan", "keyword:.home", "keyword:.router"))
-        }
-        
-        for (rule in customDirect) {
-            if (isIpRule(rule)) directIps.add(rule) else directDomains.add(rule)
+            routingRules.add(RoutingRule(action = "direct", ips = listOf("geoip:private")))
         }
 
-        // Always remove the active VPN server host and IP from direct rules to prevent routing loops
-        val serverHost = profile.address.trim()
-        if (serverHost.isNotEmpty()) {
-            directDomains.remove(serverHost)
-            directDomains.remove("domain:$serverHost")
-            directIps.remove(serverHost)
-            directIps.remove("$serverHost/32")
-        }
-
-        // Combine Proxy Domains & IPs
-        val proxyDomains = mutableListOf<String>()
-        val proxyIps = mutableListOf<String>()
-        for (rule in customProxy) {
-            if (isIpRule(rule)) proxyIps.add(rule) else proxyDomains.add(rule)
-        }
-
-        // Combine Block Domains & IPs
-        val blockDomains = mutableListOf<String>()
-        val blockIps = mutableListOf<String>()
-        for (rule in customBlock) {
-            if (isIpRule(rule)) blockIps.add(rule) else blockDomains.add(rule)
-        }
-
-        // Apply Quick IP Checkers Rule
-        if (enabledIpService) {
-            when (actionIpService.uppercase()) {
-                "BLOCKED" -> {
-                    blockDomains.addAll(ipCheckerDomains)
-                    blockIps.addAll(ipCheckerIps)
-                }
-                "VPN", "PROXY" -> {
-                    proxyDomains.addAll(ipCheckerDomains)
-                    proxyIps.addAll(ipCheckerIps)
-                }
-                "DIRECT" -> {
-                    directDomains.addAll(ipCheckerDomains)
-                    directIps.addAll(ipCheckerIps)
-                }
+        // RU Sites preset from Sentinel-Core
+        if (isBypassRu) {
+            val ruAction = quickPrefs.getString("action_ru", "DIRECT")?.lowercase() ?: "direct"
+            val target = if (ruAction == "blocked" || ruAction == "block") "block" else if (ruAction == "vpn" || ruAction == "proxy") "proxy" else "direct"
+            val preset = SentinelCore.getPreset("ru")
+            if (preset != null) {
+                routingRules.add(RoutingRule(action = target, domains = preset.domains, ips = preset.ips))
             }
         }
 
-        // Apply Quick Ads Rule
-        if (enabledAds) {
-            val adsDomains = listOf(
-                "geosite:category-ads-all",
-                "geosite:category-ads",
-                "geosite:adguard",
-                "geosite:adblock",
-                "geosite:adblockplus"
-            )
-            when (actionAds.uppercase()) {
-                "DIRECT" -> directDomains.addAll(adsDomains)
-                "VPN" -> proxyDomains.addAll(adsDomains)
-                else -> blockDomains.addAll(adsDomains)
+        // Torrents preset from Sentinel-Core
+        if (isBypassTorrents) {
+            val btAction = quickPrefs.getString("action_bt", "BLOCKED")?.lowercase() ?: "block"
+            val target = if (btAction == "direct") "direct" else if (btAction == "vpn" || btAction == "proxy") "proxy" else "block"
+            val preset = SentinelCore.getPreset("bittorrent")
+            if (preset != null) {
+                routingRules.add(RoutingRule(action = target, protocols = preset.protocols))
             }
         }
 
-        fun normalizeGeosite(rule: String): String {
-            return rule.trim()
-        }
-
-        // Apply Quick China Rule
-        if (enabledCn) {
-            val cnDomains = listOf(
-                "geosite:cn",
-                "geosite:geolocation-cn",
-                "geosite:tld-cn",
-                "domain:cn"
-            )
-            val cnIps = listOf("geoip:cn")
-            when (actionCn.uppercase()) {
-                "DIRECT" -> { directDomains.addAll(cnDomains); directIps.addAll(cnIps) }
-                "VPN" -> { proxyDomains.addAll(cnDomains); proxyIps.addAll(cnIps) }
-                else -> { blockDomains.addAll(cnDomains); blockIps.addAll(cnIps) }
+        // Ads preset from Sentinel-Core
+        if (quickPrefs.getBoolean("enabled_ads", false)) {
+            val adsAction = quickPrefs.getString("action_ads", "BLOCKED")?.lowercase() ?: "block"
+            val target = if (adsAction == "direct") "direct" else "block"
+            val preset = SentinelCore.getPreset("ads")
+            if (preset != null) {
+                routingRules.add(RoutingRule(action = target, domains = preset.domains))
             }
         }
 
-        // Apply Quick US Rule
-        if (enabledUs) {
-            val usDomains = listOf("domain:us", "domain:gov", "domain:mil")
-            val usIps = listOf("geoip:us")
-            when (actionUs.uppercase()) {
-                "DIRECT" -> { directDomains.addAll(usDomains); directIps.addAll(usIps) }
-                "VPN" -> { proxyDomains.addAll(usDomains); proxyIps.addAll(usIps) }
-                else -> { blockDomains.addAll(usDomains); blockIps.addAll(usIps) }
+        // China preset from Sentinel-Core
+        if (quickPrefs.getBoolean("enabled_cn", false)) {
+            val cnAction = quickPrefs.getString("action_cn", "BLOCKED")?.lowercase() ?: "block"
+            val target = if (cnAction == "direct") "direct" else if (cnAction == "vpn" || cnAction == "proxy") "proxy" else "block"
+            val preset = SentinelCore.getPreset("cn")
+            if (preset != null) {
+                routingRules.add(RoutingRule(action = target, domains = preset.domains, ips = preset.ips))
             }
         }
 
-
-        val torrentProtocolRule = if (isBypassTorrents) """
-            {
-              "type": "field",
-              "protocol": ["bittorrent"],
-              "outboundTag": "direct"
-            },
-        """.trimIndent().prependIndent("              ") else ""
-
-        val quicBlockRule = if (isBlockQuic) """
-            {
-              "type": "field",
-              "port": 443,
-              "network": "udp",
-              "outboundTag": "block"
-            },
-        """.trimIndent().prependIndent("              ") else ""
-
-        val smartDirectDomainsRule = if (directDomains.isNotEmpty()) """
-            {
-              "type": "field",
-              "domain": ${directDomains.distinct().map { normalizeGeosite(it) }.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
-              "outboundTag": "direct"
-            },
-        """.trimIndent().prependIndent("              ") else ""
-
-        val smartDirectIpsRule = if (directIps.isNotEmpty()) """
-            {
-              "type": "field",
-              "ip": ${directIps.distinct().joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
-              "outboundTag": "direct"
-            },
-        """.trimIndent().prependIndent("              ") else ""
-
-        val smartProxyDomainsRule = if (proxyDomains.isNotEmpty()) """
-            {
-              "type": "field",
-              "domain": ${proxyDomains.distinct().map { normalizeGeosite(it) }.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
-              "outboundTag": "proxy"
-            },
-        """.trimIndent().prependIndent("              ") else ""
-
-        val smartProxyIpsRule = if (proxyIps.isNotEmpty()) """
-            {
-              "type": "field",
-              "ip": ${proxyIps.distinct().joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
-              "outboundTag": "proxy"
-            },
-        """.trimIndent().prependIndent("              ") else ""
-
-        val smartBlockDomainsRule = if (blockDomains.isNotEmpty()) """
-            {
-              "type": "field",
-              "domain": ${blockDomains.distinct().map { normalizeGeosite(it) }.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
-              "outboundTag": "block"
-            },
-        """.trimIndent().prependIndent("              ") else ""
-
-        val smartBlockIpsRule = if (blockIps.isNotEmpty()) """
-            {
-              "type": "field",
-              "ip": ${blockIps.distinct().joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
-              "outboundTag": "block"
-            },
-        """.trimIndent().prependIndent("              ") else ""
-
-        val geoipRuleJson = if (geoipRules.isNotEmpty()) {
-            """
-            {
-              "type": "field",
-              "ip": ${geoipRules.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
-              "outboundTag": "direct"
-            },
-            """.trimIndent().prependIndent("              ")
-        } else ""
-
-        val geositeRuleJson = if (geositeRules.isNotEmpty()) {
-            """
-            {
-              "type": "field",
-              "domain": ${geositeRules.map { normalizeGeosite(it) }.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }},
-              "outboundTag": "proxy"
-            },
-            """.trimIndent().prependIndent("              ")
-        } else ""
-
-        val prefs = context.getSharedPreferences("x_prox_sensitive_ports_prefs", Context.MODE_PRIVATE)
-        val logLevel = prefs.getString("xray_log_level", "info") ?: "info"
-
-        // Compile the template
-        val json = """
-        {
-          "log": {
-            "loglevel": "$logLevel"
-          },
-          "dns": {
-            "servers": $dnsServersJson
-          },
-          "inbounds": $inboundsJson,
-          "outbounds": [
-            {
-              "tag": "proxy",
-              "protocol": "$outboundProtocol",
-              "settings": $settingsJson,
-              "streamSettings": $streamSettingsJson
-            },
-            {
-              "tag": "direct",
-              "protocol": "freedom",
-              "settings": {}
-            },
-            {
-              "tag": "block",
-              "protocol": "blackhole",
-              "settings": {
-                "response": {
-                  "type": "http"
-                }
-              }
-            },
-            {
-              "tag": "dns-out",
-              "protocol": "dns",
-              "settings": {}
-            }$captureOutbounds
-          ],
-          "routing": {
-            "domainStrategy": "IPIfNonMatch",
-            "rules": [
-              {
-                "type": "field",
-                "inboundTag": $inboundsList,
-                "port": 53,
-                "outboundTag": "dns-out"
-              },
-$captureRules$blockedRuleJson
-$blockedPortsRuleJson
-$blockedUidsRuleJson
-              {
-                "type": "field",
-                "inboundTag": ["tun-in"],
-                "port": 853,
-                "outboundTag": "block"
-              },
-$torrentProtocolRule$quicBlockRule$smartDirectDomainsRule$smartDirectIpsRule$smartProxyDomainsRule$smartProxyIpsRule$smartBlockDomainsRule$smartBlockIpsRule$geoipRuleJson$geositeRuleJson
-              {
-                "type": "field",
-                "network": "tcp,udp",
-                "outboundTag": "proxy"
-              }
-            ]
-          }
+        // US preset from Sentinel-Core
+        if (quickPrefs.getBoolean("enabled_us", false)) {
+            val usAction = quickPrefs.getString("action_us", "BLOCKED")?.lowercase() ?: "block"
+            val target = if (usAction == "direct") "direct" else if (usAction == "vpn" || usAction == "proxy") "proxy" else "block"
+            val preset = SentinelCore.getPreset("us")
+            if (preset != null) {
+                routingRules.add(RoutingRule(action = target, domains = preset.domains, ips = preset.ips))
+            }
         }
-        """.trimIndent()
 
-        configFile.writeText(json, Charsets.UTF_8)
-        Log.d(TAG, "Secure Xray config compiled to ${configFile.absolutePath} on Port ${creds.port} with secure credentials")
-        return configFile
+        // IP Checkers preset from Sentinel-Core
+        if (quickPrefs.getBoolean("enabled_ip_service", true)) {
+            val ipAction = quickPrefs.getString("action_ip_service", "DIRECT")?.lowercase() ?: "direct"
+            val target = if (ipAction == "vpn" || ipAction == "proxy") "proxy" else "direct"
+            val preset = SentinelCore.getPreset("ip_checkers")
+            if (preset != null) {
+                routingRules.add(RoutingRule(action = target, domains = preset.domains))
+            }
+        }
+
+        val dnsServers = XrayProfilePersistence.loadDnsServers(context)
+        val dnsSpec = DNSSpec(
+            servers = dnsServers.ifEmpty { listOf("https://dns.google/dns-query", "8.8.8.8") },
+            finalServer = dnsServers.firstOrNull() ?: "8.8.8.8",
+            strategy = "prefer_ipv4"
+        )
+
+        val routingSpec = RoutingSpec(
+            defaultAction = if (profile.type.equals("DIRECT", ignoreCase = true)) "direct" else "proxy",
+            rules = routingRules,
+            autoDetectInterface = true,
+            overrideDns = true
+        )
+
+        val spec = ConfigSpec(
+            targetCore = targetCore,
+            serverNode = profile.toCoreProfile(),
+            clientInbound = clientInbound,
+            serverInbounds = serverInbounds,
+            routing = routingSpec,
+            dns = dnsSpec,
+            logLevel = "info"
+        )
+
+        // 5. Build configuration via Sentinel-Core Go Engine (Single Source of Truth)
+        val buildResult = SentinelCore.buildConfig(spec)
+        if (buildResult.configJson.isNotEmpty()) {
+            configFile.writeText(buildResult.configJson, Charsets.UTF_8)
+            Log.i(TAG, "Successfully compiled client configuration via Sentinel-Core (${buildResult.targetCore})")
+            return configFile
+        }
+
+        throw IllegalStateException("Sentinel-Core failed to compile configuration: ${buildResult.error}")
     }
 }

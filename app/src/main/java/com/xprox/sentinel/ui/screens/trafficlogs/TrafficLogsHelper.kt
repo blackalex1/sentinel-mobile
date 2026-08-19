@@ -13,17 +13,17 @@ import com.xprox.sentinel.ui.screens.AppSelectorItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private fun drawableToBitmap(drawable: Drawable): Bitmap {
-    if (drawable is BitmapDrawable) {
-        if (drawable.bitmap != null) {
-            return drawable.bitmap
+private fun drawableToBitmap(drawable: Drawable, targetSize: Int = 96): Bitmap {
+    if (drawable is BitmapDrawable && drawable.bitmap != null) {
+        val src = drawable.bitmap
+        if (src.width <= targetSize && src.height <= targetSize) {
+            return src
         }
+        return Bitmap.createScaledBitmap(src, targetSize, targetSize, true)
     }
-    val bitmap = if (drawable.intrinsicWidth <= 0 || drawable.intrinsicHeight <= 0) {
-        Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
-    } else {
-        Bitmap.createBitmap(drawable.intrinsicWidth, drawable.intrinsicHeight, Bitmap.Config.ARGB_8888)
-    }
+    val width = if (drawable.intrinsicWidth > 0) minOf(drawable.intrinsicWidth, targetSize) else targetSize
+    val height = if (drawable.intrinsicHeight > 0) minOf(drawable.intrinsicHeight, targetSize) else targetSize
+    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     drawable.setBounds(0, 0, canvas.width, canvas.height)
     drawable.draw(canvas)
@@ -59,19 +59,19 @@ suspend fun getSelectorApps(context: Context): List<AppSelectorItem> = withConte
         val resolveInfos = pm.queryIntentActivities(launcherIntent, 0)
         resolveInfos.forEach { resolveInfo ->
             val appInfo = resolveInfo.activityInfo.applicationInfo
-            val label = resolveInfo.loadLabel(pm).toString()
+            val label = try { resolveInfo.loadLabel(pm).toString() } catch (t: Throwable) { appInfo.packageName }
             
             val icon = try {
                 val drawable = appInfo.loadIcon(pm)
-                val bitmap = drawableToBitmap(drawable)
+                val bitmap = drawableToBitmap(drawable, targetSize = 96)
                 bitmap.asImageBitmap()
-            } catch (e: Exception) {
+            } catch (t: Throwable) {
                 null
             }
             
             appMap[appInfo.packageName] = AppSelectorItem(label, appInfo.packageName, icon, isSystem = false)
         }
-    } catch (e: Exception) {
+    } catch (t: Throwable) {
         // Ignore
     }
     
@@ -142,13 +142,14 @@ fun exportAllLogs(
         // 2. Get secure FileProvider content URI (using the authority from AndroidManifest.xml)
         val uri = androidx.core.content.FileProvider.getUriForFile(
             context,
-            "com.xprox.sentinel.fileprovider",
+            "${context.packageName}.fileprovider",
             file
         )
 
         // 3. Create ACTION_SEND Intent sharing the actual .txt file via EXTRA_STREAM
         val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
             type = "text/plain"
+            clipData = android.content.ClipData.newRawUri(null, uri)
             putExtra(android.content.Intent.EXTRA_STREAM, uri)
             putExtra(android.content.Intent.EXTRA_SUBJECT, "Sentinel Connection Logs (All Sessions)")
             addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -176,12 +177,13 @@ fun exportXrayLogs(context: Context, xrayLogs: List<String>) {
 
         val uri = androidx.core.content.FileProvider.getUriForFile(
             context,
-            "com.xprox.sentinel.fileprovider",
+            "${context.packageName}.fileprovider",
             file
         )
 
         val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
             type = "text/plain"
+            clipData = android.content.ClipData.newRawUri(null, uri)
             putExtra(android.content.Intent.EXTRA_STREAM, uri)
             putExtra(android.content.Intent.EXTRA_SUBJECT, "Xray Core Process Logs")
             addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)

@@ -130,6 +130,8 @@ fun SettingsScreen() {
                     Spacer(modifier = Modifier.height(14.dp))
                     CoreDownloaderCard(context = context, isVpnActive = isVpnActive)
                     Spacer(modifier = Modifier.height(14.dp))
+                    XrayCoreCard(context = context, isVpnActive = isVpnActive)
+                    Spacer(modifier = Modifier.height(14.dp))
                     DnsSettingsCard(context = context)
                     Spacer(modifier = Modifier.height(14.dp))
                     AboutAppCard()

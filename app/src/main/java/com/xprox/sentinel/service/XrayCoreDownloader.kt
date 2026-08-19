@@ -61,6 +61,34 @@ object XrayCoreDownloader {
         prefs.edit().putString(KEY_INSTALLED_VERSION, version).apply()
     }
 
+data class DatabaseStatus(
+    val geoipExists: Boolean,
+    val geoipSizeFormatted: String,
+    val geositeExists: Boolean,
+    val geositeSizeFormatted: String,
+    val isComplete: Boolean
+)
+
+    fun getDatabaseStatus(context: Context): DatabaseStatus {
+        val binDir = File(context.filesDir, "bin")
+        val geoip = File(binDir, "geoip.dat")
+        val geosite = File(binDir, "geosite.dat")
+
+        val geoipExists = geoip.exists() && geoip.length() > 0
+        val geositeExists = geosite.exists() && geosite.length() > 0
+
+        val geoipSize = if (geoipExists) "%.1f MB".format(geoip.length() / (1024.0 * 1024.0)) else "Нет"
+        val geositeSize = if (geositeExists) "%.1f MB".format(geosite.length() / (1024.0 * 1024.0)) else "Нет"
+
+        return DatabaseStatus(
+            geoipExists = geoipExists,
+            geoipSizeFormatted = geoipSize,
+            geositeExists = geositeExists,
+            geositeSizeFormatted = geositeSize,
+            isComplete = geoipExists && geositeExists
+        )
+    }
+
     private fun isInstalled(context: Context): Boolean {
         val binDir = File(context.filesDir, "bin")
         val xrayFile = File(binDir, BINARY_NAME)

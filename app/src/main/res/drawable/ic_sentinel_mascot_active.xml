@@ -4,61 +4,75 @@
     android:viewportWidth="100"
     android:viewportHeight="100">
 
-    <!-- Android Bugdroid Antenna Left (Energized Green/Cyan) -->
+    <!-- 30° Rod Antenna Left -->
     <path
-        android:pathData="M 38,22 L 26,8"
-        android:strokeWidth="5"
-        android:strokeColor="#22D3EE"
+        android:pathData="M 32,21 L 18,5"
+        android:strokeWidth="4"
+        android:strokeColor="#3DDC84"
         android:strokeLineCap="round" />
 
-    <!-- Android Bugdroid Antenna Right (Energized Green/Cyan) -->
+    <!-- 30° Rod Antenna Right -->
     <path
-        android:pathData="M 62,22 L 74,8"
-        android:strokeWidth="5"
-        android:strokeColor="#22D3EE"
+        android:pathData="M 68,21 L 82,5"
+        android:strokeWidth="4"
+        android:strokeColor="#3DDC84"
         android:strokeLineCap="round" />
 
-    <!-- Robot Bugdroid Head / Shield Helmet Body (Active Green Glow) -->
+    <!-- Antenna Spherical Glow Tips -->
     <path
-        android:pathData="M 50,16 C 76,16 82,26 82,42 L 82,66 C 82,82 50,96 50,96 C 50,96 18,82 18,66 L 18,42 C 18,26 24,16 50,16 Z"
-        android:strokeWidth="4.5"
-        android:strokeColor="#10B981"
-        android:fillColor="#091811" />
+        android:pathData="M 18,5 m -3.2,0 a 3.2,3.2 0 1,0 6.4,0 a 3.2,3.2 0 1,0 -6.4,0"
+        android:fillColor="#FFFFFF" />
+    <path
+        android:pathData="M 82,5 m -3.2,0 a 3.2,3.2 0 1,0 6.4,0 a 3.2,3.2 0 1,0 -6.4,0"
+        android:fillColor="#FFFFFF" />
 
-    <!-- Left Cyber Cheek Wing (Emerald) -->
+    <!-- Bugdroid Capsule Head Silhouette & Body -->
     <path
-        android:pathData="M 18,42 L 34,52 L 34,74 L 18,66 Z"
-        android:fillColor="#10B981"
-        android:fillAlpha="0.55" />
+        android:pathData="M 16,48 A 34,34 0 0,1 84,48 L 84,68 Q 84,84 68,88 L 50,92 L 32,88 Q 16,84 16,68 Z"
+        android:strokeWidth="4.2"
+        android:strokeColor="#3DDC84"
+        android:fillColor="#07160D" />
 
-    <!-- Right Cyber Cheek Wing (Cyber Cyan) -->
+    <!-- Lateral Side Cowlings -->
     <path
-        android:pathData="M 82,42 L 66,52 L 66,74 L 82,66 Z"
-        android:fillColor="#06B6D4"
-        android:fillAlpha="0.55" />
+        android:pathData="M 16,48 L 28,52 L 28,76 L 16,72 Z"
+        android:fillColor="#3DDC84"
+        android:fillAlpha="0.35" />
+    <path
+        android:pathData="M 84,48 L 72,52 L 72,76 L 84,72 Z"
+        android:fillColor="#3DDC84"
+        android:fillAlpha="0.35" />
 
-    <!-- Robot Glowing Visor Eye Left (Neon Cyan) -->
+    <!-- Curved Dark Visor Screen Inset -->
     <path
-        android:pathData="M 28,34 L 43,34 L 41,41 L 30,41 Z"
+        android:pathData="M 26,33 L 74,33 L 74,49 L 50,54 L 26,49 Z"
+        android:fillColor="#020617" />
+
+    <!-- Rectangular Cyber-Optic Eyes (Neon Cyan) -->
+    <path
+        android:pathData="M 31,34 L 43,34 L 43,41 L 31,41 Z"
+        android:fillColor="#22D3EE" />
+    <path
+        android:pathData="M 57,34 L 69,34 L 69,41 L 57,41 Z"
         android:fillColor="#22D3EE" />
 
-    <!-- Robot Glowing Visor Eye Right (Neon Cyan) -->
+    <!-- Titanium Magnetic Clamps -->
     <path
-        android:pathData="M 57,34 L 72,34 L 70,41 L 59,41 Z"
+        android:pathData="M 46,48 L 54,48 L 54,51.2 L 46,51.2 Z M 46,84 L 54,84 L 54,87.2 L 46,87.2 Z"
+        android:fillColor="#1E293B" />
+
+    <!-- Quantum Diamond Arc Reactor (Outer Android Green Diamond) -->
+    <path
+        android:pathData="M 50,51 L 63,64 L 50,84 L 37,64 Z"
+        android:fillColor="#3DDC84" />
+
+    <!-- Inner Quantum Prism (Cyan) -->
+    <path
+        android:pathData="M 50,56 L 57,64 L 50,78 L 43,64 Z"
         android:fillColor="#22D3EE" />
 
-    <!-- Diamond Plasma Crystal Core (Outer Emerald Diamond) -->
+    <!-- Radiant Singularity Heart -->
     <path
-        android:pathData="M 50,44 L 64,58 L 50,80 L 36,58 Z"
-        android:fillColor="#10B981" />
-
-    <!-- Diamond Plasma Crystal Core (Inner Neon Spark) -->
-    <path
-        android:pathData="M 50,50 L 58,58 L 50,73 L 42,58 Z"
-        android:fillColor="#22D3EE" />
-
-    <!-- Diamond Plasma Core (White Radiant Heart) -->
-    <path
-        android:pathData="M 50,54 L 54,58 L 50,64 L 46,58 Z"
+        android:pathData="M 50,60 L 54,64 L 50,70 L 46,64 Z"
         android:fillColor="#FFFFFF" />
 </vector>

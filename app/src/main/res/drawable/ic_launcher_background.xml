@@ -4,7 +4,22 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+
+    <!-- Deep Space Dark Titanium Background -->
     <path
-        android:fillColor="#07090E"
-        android:pathData="M0,0h108v108h-108z" />
+        android:fillColor="#060A14"
+        android:pathData="M 0,0 H 108 V 108 H 0 Z" />
+
+    <!-- Ambient Emerald Radial Halo -->
+    <path
+        android:pathData="M 54,14 A 40,40 0 1,1 53.9,14"
+        android:fillColor="#0D261A"
+        android:fillAlpha="0.85" />
+
+    <!-- Subtle Cyber Orbit Ring -->
+    <path
+        android:pathData="M 54,16 A 38,38 0 1,1 53.9,16"
+        android:strokeWidth="1.2"
+        android:strokeColor="#3DDC84"
+        android:strokeAlpha="0.25" />
 </vector>
