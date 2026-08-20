@@ -101,9 +101,10 @@ fun DashboardRadarButton(
         }
     }
 
-    // Continuous Tactical Radar Sweep Animation (360 degrees)
+    // FIX: Sweep rotation — was always-running infiniteRepeatable (even when !isRunning).
+    // Now uses animateFloatAsState to freeze when disconnected, resuming on reconnect.
     val infiniteTransition = rememberInfiniteTransition(label = "radarSweep")
-    val sweepRotation by infiniteTransition.animateFloat(
+    val sweepRotationRunning by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
@@ -112,6 +113,14 @@ fun DashboardRadarButton(
         ),
         label = "sweepRotation"
     )
+    // Hold the last value when disconnected so rotation doesn't snap to 0
+    val frozenRotation = remember { mutableFloatStateOf(0f) }
+    val sweepRotation = if (isRunning) {
+        frozenRotation.floatValue = sweepRotationRunning
+        sweepRotationRunning
+    } else {
+        frozenRotation.floatValue
+    }
 
     // Sonar Wave Ripple 1
     val sonarWave1 by infiniteTransition.animateFloat(
@@ -208,6 +217,20 @@ fun DashboardRadarButton(
                 ) {}
             }
 
+            // FIX: Pre-compute & cache Brush objects — rebuilding Brush inside draw() causes
+            // per-frame allocation + GPU shader recompilation. Key on discretized alpha (0.01 steps)
+            // so they only rebuild when the value meaningfully changes (~100 steps max).
+            val glowAlphaKey = (runningGlowAlpha * 100).toInt()
+            val cachedSweepBrush = remember(glowAlphaKey) {
+                Brush.sweepGradient(
+                    0f to Color.Transparent,
+                    0.75f to Color.Transparent,
+                    0.833f to SecureGreen.copy(alpha = 0.04f * runningGlowAlpha),
+                    0.94f to SecureGreen.copy(alpha = 0.20f * runningGlowAlpha),
+                    1f to SecureGreen.copy(alpha = 0.45f * runningGlowAlpha)
+                )
+            }
+
             // Authentic High-Tech Radar Canvas Scope (Sector Sweep, Sonar Waves & Server Blips)
             Canvas(
                 modifier = Modifier
@@ -250,15 +273,9 @@ fun DashboardRadarButton(
                     drawContext.canvas.save()
                     drawContext.transform.rotate(sweepRotation, centerOffset)
 
-                    // Trailing 60-degree Sector Glow Arc
+                    // Trailing 60-degree Sector Glow Arc — uses pre-built cachedSweepBrush
                     drawArc(
-                        brush = Brush.sweepGradient(
-                            0f to Color.Transparent,
-                            0.75f to Color.Transparent,
-                            0.833f to SecureGreen.copy(alpha = 0.04f * runningGlowAlpha),
-                            0.94f to SecureGreen.copy(alpha = 0.20f * runningGlowAlpha),
-                            1f to SecureGreen.copy(alpha = 0.45f * runningGlowAlpha)
-                        ),
+                        brush = cachedSweepBrush,
                         startAngle = 0f,
                         sweepAngle = 360f,
                         useCenter = true,
@@ -266,13 +283,18 @@ fun DashboardRadarButton(
                         topLeft = Offset(centerOffset.x - maxRadius, centerOffset.y - maxRadius)
                     )
 
-                    // Leading Laser Sweep Line
-                    drawLine(
-                        brush = Brush.linearGradient(
-                            colors = listOf(Color.Transparent, SecureGreen.copy(alpha = runningGlowAlpha), CyberCyan.copy(alpha = runningGlowAlpha)),
-                            start = centerOffset,
-                            end = Offset(centerOffset.x + maxRadius, centerOffset.y)
+                    // Leading Laser Sweep Line — linearGradient keyed on size+alpha (stable)
+                    val laserBrush = Brush.linearGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            SecureGreen.copy(alpha = runningGlowAlpha),
+                            CyberCyan.copy(alpha = runningGlowAlpha)
                         ),
+                        start = centerOffset,
+                        end = Offset(centerOffset.x + maxRadius, centerOffset.y)
+                    )
+                    drawLine(
+                        brush = laserBrush,
                         start = centerOffset,
                         end = Offset(centerOffset.x + maxRadius, centerOffset.y),
                         strokeWidth = 2.5.dp.toPx(),

@@ -87,6 +87,7 @@ typedef struct { void *data; GoInt len; GoInt cap; } GoSlice;
 extern "C" {
 #endif
 
+extern char* SentinelGetEngineVersion(void);
 extern char* SentinelBuildConfig(char* specJSON);
 extern char* SentinelBuildServerConfig(char* specJSON);
 extern char* SentinelParseURI(char* rawURI);
@@ -128,6 +129,14 @@ extern char* SentinelAndroidUnblockApp(char* pkgName);
 extern char* SentinelAndroidIsAppBlocked(char* pkgName);
 extern char* SentinelAndroidGetBlockedApps(void);
 extern char* SentinelAndroidClearThreats(void);
+extern char* SentinelBatchPing(char* targetsJSON, int timeoutMs);
+extern char* SentinelProxyPing(int socksPort, char* authUser, char* authPass, char* targetURL, int timeoutMs);
+extern char* SentinelGetPublicIP(int socksPort, char* authUser, char* authPass, int timeoutMs);
+extern char* SentinelOptimizeRules(char* rulesJSON);
+extern char* SentinelAndroidPushLog(char* logJSON);
+extern char* SentinelAndroidGetLogs(int limit, int offset, int portFilter, char* query);
+extern char* SentinelAndroidGetLogStats(void);
+extern char* SentinelAndroidClearLogs(void);
 extern void SentinelFreeString(char* str);
 
 #ifdef __cplusplus

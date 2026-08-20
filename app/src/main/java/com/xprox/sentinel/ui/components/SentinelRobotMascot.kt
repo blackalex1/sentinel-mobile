@@ -9,14 +9,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import kotlinx.coroutines.delay
-import kotlin.math.PI
-import kotlin.math.sin
 
 /**
  * Official Android Sentinel Bugdroid Capsule Droid Mascot (x-prox).
@@ -112,11 +109,6 @@ fun SentinelRobotMascot(
         label = "sleepProgress"
     )
 
-    val shockFadeAlpha by animateFloatAsState(
-        targetValue = if (isShocking) 1.0f else 0.0f,
-        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
-        label = "shockFadeAlpha"
-    )
 
     val animatedEyeColor by animateColorAsState(
         targetValue = currentEyeColor,
@@ -154,38 +146,42 @@ fun SentinelRobotMascot(
         label = "reactorGlow"
     )
 
-    // Phased 5G/WiFi Radio Waves from Antenna Tips
-    val radioWaveProgress by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1600, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "radioWaveProgress"
-    )
+    // FIX: Radio wave progress — derived from reactorGlow instead of a 3rd separate ticker.
+    // reactorGlow oscillates 0.85..1.25 → remap to 0..1 (same visual rhythm, zero extra cost)
+    val radioWaveProgress = ((reactorGlow - 0.85f) / 0.40f).coerceIn(0f, 1f)
 
-    // Jitter on Electric Shock
-    val electricShakeXRaw by infiniteTransition.animateFloat(
-        initialValue = -2.0f,
-        targetValue = 2.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 50, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "electricShakeXRaw"
-    )
-    val electricShakeYRaw by infiniteTransition.animateFloat(
-        initialValue = -1.8f,
-        targetValue = 1.8f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 65, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "electricShakeYRaw"
-    )
-    val shakeX = electricShakeXRaw * shockFadeAlpha
-    val shakeY = electricShakeYRaw * shockFadeAlpha
+    // FIX: Electric Shock Jitter — was 2x infiniteRepeatable at 50ms/65ms (20 FPS ALWAYS).
+    // Now uses Animatable that only runs during the isShocking window (~580ms total).
+    val shakeXAnim = remember { Animatable(0f) }
+    val shakeYAnim = remember { Animatable(0f) }
+
+    LaunchedEffect(isShocking) {
+        if (isShocking) {
+            while (true) {
+                shakeXAnim.animateTo(
+                    if (shakeXAnim.value > 0f) -2.0f else 2.0f,
+                    animationSpec = tween(50, easing = LinearEasing)
+                )
+            }
+        } else {
+            shakeXAnim.animateTo(0f, animationSpec = tween(80))
+        }
+    }
+    LaunchedEffect(isShocking) {
+        if (isShocking) {
+            while (true) {
+                shakeYAnim.animateTo(
+                    if (shakeYAnim.value > 0f) -1.8f else 1.8f,
+                    animationSpec = tween(65, easing = LinearEasing)
+                )
+            }
+        } else {
+            shakeYAnim.animateTo(0f, animationSpec = tween(80))
+        }
+    }
+
+    val shakeX = shakeXAnim.value
+    val shakeY = shakeYAnim.value
 
     Canvas(modifier = modifier.fillMaxSize()) {
         val w = size.width
@@ -212,7 +208,6 @@ fun SentinelRobotMascot(
             radius = 48f * s,
             center = Offset(fx(50f), fy(50f))
         )
-
         // 2. 30° Bugdroid Rod Antennae
         val antennaColor = animatedArmorColor
         val antennaStrokeWidth = 4.0f * s
@@ -290,16 +285,20 @@ fun SentinelRobotMascot(
             close()
         }
 
-        // Armor Base Gradient
-        val armorGradient = Brush.verticalGradient(
-            colors = if (isRunning) {
-                listOf(Color(0xFF0C1F14), Color(0xFF07160D), Color(0xFF030A06))
-            } else {
-                listOf(Color(0xFF160D24), Color(0xFF0F0819), Color(0xFF06030A))
-            },
-            startY = fy(14f),
-            endY = fy(92f)
-        )
+        // FIX: armorGradient was rebuilt every frame (fy() depends on breatheY).
+        // Use canvas-top/bottom coords (0f, h) — the body occupies ~80% of canvas height,
+        // so top-to-bottom gradient looks identical without the breatheY dependency.
+        val armorGradient = if (isRunning) {
+            Brush.verticalGradient(
+                colors = listOf(Color(0xFF0C1F14), Color(0xFF07160D), Color(0xFF030A06)),
+                startY = 0f, endY = h
+            )
+        } else {
+            Brush.verticalGradient(
+                colors = listOf(Color(0xFF160D24), Color(0xFF0F0819), Color(0xFF06030A)),
+                startY = 0f, endY = h
+            )
+        }
         drawPath(path = chassisPath, brush = armorGradient, style = Fill)
 
         // Signature Armor Contour Glow Border
