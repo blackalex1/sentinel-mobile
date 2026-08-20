@@ -199,6 +199,25 @@ object LogManager {
         // Broadcast to dynamic UI flow
         _logFlow.tryEmit(logEntry)
 
+        // Push to native Go zero-allocation RingBuffer
+        try {
+            com.xprox.sentinel.core.SentinelCore.pushLog(
+                com.xprox.sentinel.core.models.AndroidLogEntry(
+                    timestamp = System.currentTimeMillis(),
+                    packageName = packageName,
+                    appName = appName,
+                    destinationIp = destinationIp,
+                    destinationPort = port,
+                    protocol = protocol,
+                    serviceName = if (isThreatBlocked) "BLOCKED" else service,
+                    action = if (isThreatBlocked) "block" else "direct",
+                    threatType = if (isThreatBlocked) "THREAT" else "NONE"
+                )
+            )
+        } catch (e: Throwable) {
+            // Ignore native push error
+        }
+
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val saveAll = prefs.getBoolean("save_all_logs_to_disk", false)
 

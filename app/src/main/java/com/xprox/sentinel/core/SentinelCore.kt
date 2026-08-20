@@ -37,6 +37,14 @@ object SentinelCore {
         fun SentinelAndroidIsAppBlocked(pkgName: String): Pointer?
         fun SentinelAndroidGetBlockedApps(): Pointer?
         fun SentinelAndroidClearThreats(): Pointer?
+        fun SentinelBatchPing(targetsJson: String, timeoutMs: Int): Pointer?
+        fun SentinelProxyPing(socksPort: Int, targetUrl: String, timeoutMs: Int): Pointer?
+        fun SentinelGetPublicIP(socksPort: Int, timeoutMs: Int): Pointer?
+        fun SentinelOptimizeRules(rulesJson: String): Pointer?
+        fun SentinelAndroidPushLog(logJson: String): Pointer?
+        fun SentinelAndroidGetLogs(limit: Int, offset: Int, portFilter: Int, query: String): Pointer?
+        fun SentinelAndroidGetLogStats(): Pointer?
+        fun SentinelAndroidClearLogs(): Pointer?
         fun SentinelFreeString(str: Pointer?)
     }
 
@@ -185,30 +193,116 @@ object SentinelCore {
         }
     }
 
+    private val fallbackPresets = listOf(
+        RoutingPreset(
+            id = "ru",
+            name = "Сайты России (RU)",
+            description = "Все IP и сайты России",
+            defaultTarget = "direct",
+            domains = listOf("geosite:category-ru", "geosite:category-gov-ru", "geosite:yandex", "geosite:vk", "geosite:mailru", "domain:sberbank.ru", "domain:tbank.ru", "domain:tinkoff.ru", "domain:ozon.ru", "domain:wildberries.ru", "domain:2gis.ru", "domain:avito.ru", "regexp:.*\\.ru$", "regexp:.*\\.su$", "regexp:.*\\.рф$", "regexp:.*\\.xn--p1ai$"),
+            ips = listOf("geoip:ru")
+        ),
+        RoutingPreset(
+            id = "ip_checkers",
+            name = "Сервисы определения IP",
+            description = "ipify, 2ip, ifconfig, ipinfo и др.",
+            defaultTarget = "direct",
+            domains = listOf(
+                "domain:ipify.org", "domain:api.ipify.org", "domain:checkip.amazonaws.com",
+                "domain:ifconfig.me", "domain:ifconfig.co", "domain:ifconfig.io",
+                "domain:telega.me", "domain:ipinfo.io", "domain:2ip.ru", "domain:2ip.io",
+                "domain:2ip.ua", "domain:2ip.me", "domain:myip.ru", "domain:myip.com",
+                "domain:icanhazip.com", "domain:wtfismyip.com", "domain:ip.sb",
+                "domain:ipapi.co", "domain:ip-api.com", "domain:ipapi.com", "domain:db-ip.com",
+                "domain:whoer.net", "domain:ipwhois.io", "domain:ipwho.is", "domain:ipaddress.my",
+                "domain:ipaddress.com", "domain:check-host.net", "domain:browserleaks.com",
+                "domain:ip2location.com", "domain:ip2location.io", "domain:showmyip.com",
+                "domain:whatsmyip.org", "domain:whatismyip.com", "domain:whatsmyipaddress.com",
+                "domain:dnsleaktest.com", "domain:ipleak.net", "domain:ip.me", "domain:ip.cn",
+                "domain:ip138.com", "domain:ident.me", "domain:curlmyip.org", "domain:eth0.me",
+                "domain:myexternalip.com", "domain:ip.nf", "domain:trackip.net", "domain:checkip.dyndns.org",
+                "keyword:ipify", "keyword:2ip", "keyword:ipwhois", "keyword:icanhazip",
+                "keyword:ifconfig", "keyword:checkip", "keyword:browserleaks", "keyword:whoer", "keyword:ipleak"
+            )
+        ),
+        RoutingPreset(
+            id = "bittorrent",
+            name = "BitTorrent трафик",
+            description = "Торрент-трафик и трекеры",
+            defaultTarget = "block",
+            protocols = listOf("bittorrent"),
+            domains = listOf("domain:torrent", "domain:tracker", "domain:peerexchange", "keyword:torrent", "keyword:tracker")
+        ),
+        RoutingPreset(
+            id = "ads",
+            name = "Реклама и трекеры",
+            description = "AdBlock geosite категории",
+            defaultTarget = "block",
+            domains = listOf("geosite:category-ads-all")
+        ),
+        RoutingPreset(
+            id = "cn",
+            name = "Сайты Китая (CN)",
+            description = "Все IP и сайты Китая",
+            defaultTarget = "block",
+            domains = listOf("geosite:cn", "regexp:.*\\.cn$"),
+            ips = listOf("geoip:cn")
+        ),
+        RoutingPreset(
+            id = "us",
+            name = "Сайты США (US)",
+            description = "Все IP и сайты США",
+            defaultTarget = "block",
+            domains = listOf("regexp:.*\\.us$"),
+            ips = listOf("geoip:us")
+        )
+    )
+
     /**
      * Lists all available atomic routing presets built into the Sentinel-Core engine.
      */
     fun listPresets(): List<RoutingPreset> {
-        val respJson = callNative { it.SentinelListPresets() } ?: return emptyList()
-        return try {
-            SentinelJson.decodeFromString<List<RoutingPreset>>(respJson)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to decode presets from Sentinel-Core: $respJson", e)
-            emptyList()
+        val respJson = callNative { it.SentinelListPresets() }
+        if (!respJson.isNullOrEmpty()) {
+            try {
+                val list = SentinelJson.decodeFromString<List<RoutingPreset>>(respJson)
+                if (list.isNotEmpty()) {
+                    return list.map { p ->
+                        if (p.id == "ip_checkers") p.copy(ips = null) else p
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to decode presets from Sentinel-Core: $respJson", e)
+            }
         }
+        return fallbackPresets
     }
 
     /**
      * Retrieves detailed information about a specific routing preset.
      */
     fun getPreset(presetId: String): RoutingPreset? {
-        val respJson = callNative { it.SentinelGetPreset(presetId) } ?: return null
-        return try {
-            SentinelJson.decodeFromString<RoutingPreset>(respJson)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to decode preset $presetId from Sentinel-Core: $respJson", e)
-            null
+        val respJson = callNative { it.SentinelGetPreset(presetId) }
+        if (!respJson.isNullOrEmpty()) {
+            try {
+                val preset = SentinelJson.decodeFromString<RoutingPreset>(respJson)
+                if (preset.id == "ip_checkers") {
+                    return preset.copy(ips = null)
+                }
+                return preset
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to decode preset $presetId from Sentinel-Core: $respJson", e)
+            }
         }
+        val canonicalId = when (presetId) {
+            "bypass_ru", "block_ru", "smart_ru" -> "ru"
+            "torrent_shield", "block_torrent" -> "bittorrent"
+            "block_ads" -> "ads"
+            "block_cn" -> "cn"
+            "block_us" -> "us"
+            else -> presetId
+        }
+        return fallbackPresets.firstOrNull { it.id == canonicalId }
     }
 
     /**
@@ -623,6 +717,174 @@ object SentinelCore {
         fallbackBlockedApps.clear()
         fallbackAttempts.clear()
         callNative { it.SentinelAndroidClearThreats() }
+    }
+
+    /**
+     * Executes high-performance parallel TCP ping across a batch of targets via Sentinel-Core Go engine.
+     */
+    fun batchPing(targets: List<PingTarget>, timeoutMs: Int = 2500): List<BatchPingResult> {
+        if (targets.isEmpty()) return emptyList()
+        val jsonStr = try {
+            SentinelJson.encodeToString(kotlinx.serialization.builtins.ListSerializer(com.xprox.sentinel.core.models.PingTarget.serializer()), targets)
+        } catch (e: Exception) {
+            "[]"
+        }
+        val respJson = callNative { it.SentinelBatchPing(jsonStr, timeoutMs) }
+        if (!respJson.isNullOrEmpty()) {
+            try {
+                return SentinelJson.decodeFromString<List<BatchPingResult>>(respJson)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to decode batch ping results: $respJson", e)
+            }
+        }
+        // Fallback: simple response
+        return targets.map { BatchPingResult(id = it.id, address = it.address, port = it.port, success = false, error = "Native engine unavailable") }
+    }
+
+    /**
+     * Measures real HTTP/TLS handshake latency via SOCKS5 proxy using Sentinel-Core.
+     */
+    fun proxyPing(socksPort: Int, targetUrl: String = "http://cp.cloudflare.com/generate_204", timeoutMs: Int = 3000): ProxyPingResult {
+        val respJson = callNative { it.SentinelProxyPing(socksPort, targetUrl, timeoutMs) }
+        if (!respJson.isNullOrEmpty()) {
+            try {
+                return SentinelJson.decodeFromString<ProxyPingResult>(respJson)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to decode proxy ping result: $respJson", e)
+            }
+        }
+        return ProxyPingResult(success = false, error = "Native engine unavailable")
+    }
+
+    /**
+     * Concurrently probes multiple trusted IP checking services via optional SOCKS5 proxy in Go.
+     */
+    fun getPublicIP(socksPort: Int = 0, timeoutMs: Int = 3500): PublicIPInfo? {
+        val respJson = callNative { it.SentinelGetPublicIP(socksPort, timeoutMs) }
+        if (!respJson.isNullOrEmpty()) {
+            try {
+                return SentinelJson.decodeFromString<PublicIPInfo>(respJson)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to decode public IP info: $respJson", e)
+            }
+        }
+        return null
+    }
+
+    private val fallbackRingBuffer = java.util.concurrent.ConcurrentLinkedDeque<AndroidLogEntry>()
+    private val fallbackTotalLogged = java.util.concurrent.atomic.AtomicLong(0)
+
+    /**
+     * Pushes an enriched connection log entry into the native in-memory RingBuffer.
+     */
+    fun pushLog(entry: AndroidLogEntry): Boolean {
+        fallbackTotalLogged.incrementAndGet()
+        fallbackRingBuffer.addFirst(entry)
+        while (fallbackRingBuffer.size > 5000) {
+            fallbackRingBuffer.removeLast()
+        }
+
+        val jsonStr = try {
+            SentinelJson.encodeToString(com.xprox.sentinel.core.models.AndroidLogEntry.serializer(), entry)
+        } catch (e: Exception) {
+            return true
+        }
+        val resp = callNative { it.SentinelAndroidPushLog(jsonStr) }
+        return resp != null && resp.contains("\"success\": true")
+    }
+
+    /**
+     * Retrieves filtered, paginated connection log records from native RingBuffer.
+     */
+    fun getLogs(limit: Int = 100, offset: Int = 0, portFilter: Int = 0, query: String = ""): List<AndroidLogEntry> {
+        val resp = callNative { it.SentinelAndroidGetLogs(limit, offset, portFilter, query) }
+        if (!resp.isNullOrEmpty()) {
+            try {
+                return SentinelJson.decodeFromString<List<AndroidLogEntry>>(resp)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to decode logs from native ring buffer: $resp", e)
+            }
+        }
+
+        // Resilient Fallback for non-JNI JVM runtime
+        val qLower = query.trim().lowercase()
+        val filtered = fallbackRingBuffer.filter { e ->
+            if (portFilter > 0 && e.destinationPort != portFilter) return@filter false
+            if (qLower.isNotEmpty()) {
+                val match = e.appName.lowercase().contains(qLower) ||
+                        e.packageName.lowercase().contains(qLower) ||
+                        e.destinationIp.lowercase().contains(qLower) ||
+                        (e.serviceName?.lowercase()?.contains(qLower) == true) ||
+                        e.protocol.lowercase().contains(qLower)
+                if (!match) return@filter false
+            }
+            true
+        }
+
+        if (offset >= filtered.size) return emptyList()
+        val end = (offset + limit).coerceAtMost(filtered.size)
+        return filtered.subList(offset, end)
+    }
+
+    /**
+     * Retrieves aggregated traffic metrics (Top Apps, Top Ports, Protocol Breakdown) from native RingBuffer.
+     */
+    fun getLogStats(): AndroidLogStats {
+        val resp = callNative { it.SentinelAndroidGetLogStats() }
+        if (!resp.isNullOrEmpty()) {
+            try {
+                return SentinelJson.decodeFromString<AndroidLogStats>(resp)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to decode log stats: $resp", e)
+            }
+        }
+
+        // Resilient Fallback
+        val appCounts = mutableMapOf<String, com.xprox.sentinel.core.models.AppStat>()
+        val portCounts = mutableMapOf<Int, Long>()
+        val protoBreakdown = mutableMapOf<String, Long>()
+        var threatCount = 0L
+
+        fallbackRingBuffer.forEach { e ->
+            val pkg = e.packageName.ifEmpty { "unknown" }
+            val cur = appCounts.getOrPut(pkg) { com.xprox.sentinel.core.models.AppStat(pkg, e.appName, 0) }
+            appCounts[pkg] = cur.copy(count = cur.count + 1)
+
+            if (e.destinationPort > 0) {
+                portCounts[e.destinationPort] = (portCounts[e.destinationPort] ?: 0L) + 1
+            }
+
+            val proto = e.protocol.uppercase().ifEmpty { "TCP" }
+            protoBreakdown[proto] = (protoBreakdown[proto] ?: 0L) + 1
+
+            if (e.threatType.isNotEmpty() && e.threatType != "NONE") {
+                threatCount++
+            }
+        }
+
+        val topApps = appCounts.values.sortedByDescending { it.count }.take(10)
+        val topPorts = portCounts.map { (p, c) ->
+            com.xprox.sentinel.core.models.PortStat(port = p, serviceName = "Port $p", count = c)
+        }.sortedByDescending { it.count }.take(10)
+
+        return AndroidLogStats(
+            totalConnections = fallbackTotalLogged.get(),
+            activeAppsCount = appCounts.size,
+            threatCount = threatCount,
+            protocolBreakdown = protoBreakdown,
+            topApps = topApps,
+            topPorts = topPorts
+        )
+    }
+
+    /**
+     * Clears all log records from the native in-memory RingBuffer.
+     */
+    fun clearLogs(): Boolean {
+        fallbackRingBuffer.clear()
+        fallbackTotalLogged.set(0)
+        val resp = callNative { it.SentinelAndroidClearLogs() }
+        return resp != null
     }
 }
 

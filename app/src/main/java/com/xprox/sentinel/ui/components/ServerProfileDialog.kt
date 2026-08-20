@@ -302,7 +302,7 @@ fun ServerProfileDialog(
                     val newProfile = XrayConfigManager.ServerProfile(
                         id = profile?.id ?: UUID.randomUUID().toString(),
                         name = name.ifEmpty { 
-                            if (com.xprox.sentinel.data.LanguageManager.currentLanguage.value.code == "ru") "Анализ трафика (Без VPN)" else "Direct Traffic Analysis (No VPN)"
+                            if (com.xprox.sentinel.data.LanguageManager.currentLanguage.value.code == "ru") "Анализ трафика" else "Traffic Analysis"
                         },
                         address = if (isDirectMode) "" else address,
                         port = if (isDirectMode) 0 else port,

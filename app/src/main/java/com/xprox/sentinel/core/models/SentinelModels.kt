@@ -233,3 +233,79 @@ data class ParsedConnectionLog(
     @SerialName("dest_ip") val destIp: String = "",
     @SerialName("dest_port") val destPort: Int = 0
 )
+
+@Serializable
+data class PingTarget(
+    @SerialName("id") val id: String = "",
+    @SerialName("address") val address: String,
+    @SerialName("port") val port: Int = 443
+)
+
+@Serializable
+data class BatchPingResult(
+    @SerialName("id") val id: String = "",
+    @SerialName("address") val address: String = "",
+    @SerialName("port") val port: Int = 0,
+    @SerialName("success") val success: Boolean = false,
+    @SerialName("latencyMs") val latencyMs: Double = 0.0,
+    @SerialName("error") val error: String? = null
+)
+
+@Serializable
+data class ProxyPingResult(
+    @SerialName("success") val success: Boolean = false,
+    @SerialName("latencyMs") val latencyMs: Double = 0.0,
+    @SerialName("error") val error: String? = null
+)
+
+@Serializable
+data class PublicIPInfo(
+    @SerialName("ip") val ip: String,
+    @SerialName("country") val country: String? = null,
+    @SerialName("countryCode") val countryCode: String? = null,
+    @SerialName("city") val city: String? = null,
+    @SerialName("region") val region: String? = null,
+    @SerialName("org") val org: String? = null,
+    @SerialName("asn") val asn: String? = null
+)
+
+@Serializable
+data class AndroidLogEntry(
+    @SerialName("id") val id: String = "",
+    @SerialName("timestamp") val timestamp: Long = 0L,
+    @SerialName("packageName") val packageName: String,
+    @SerialName("appName") val appName: String,
+    @SerialName("sourceIp") val sourceIp: String? = null,
+    @SerialName("sourcePort") val sourcePort: Int? = null,
+    @SerialName("destinationIp") val destinationIp: String,
+    @SerialName("destinationPort") val destinationPort: Int,
+    @SerialName("protocol") val protocol: String = "TCP",
+    @SerialName("serviceName") val serviceName: String? = null,
+    @SerialName("action") val action: String = "direct",
+    @SerialName("threatType") val threatType: String = "NONE",
+    @SerialName("riskScore") val riskScore: Int = 0
+)
+
+@Serializable
+data class AppStat(
+    @SerialName("packageName") val packageName: String,
+    @SerialName("appName") val appName: String,
+    @SerialName("count") val count: Long
+)
+
+@Serializable
+data class PortStat(
+    @SerialName("port") val port: Int,
+    @SerialName("serviceName") val serviceName: String,
+    @SerialName("count") val count: Long
+)
+
+@Serializable
+data class AndroidLogStats(
+    @SerialName("totalConnections") val totalConnections: Long = 0L,
+    @SerialName("activeAppsCount") val activeAppsCount: Int = 0,
+    @SerialName("threatCount") val threatCount: Long = 0L,
+    @SerialName("protocolBreakdown") val protocolBreakdown: Map<String, Long> = emptyMap(),
+    @SerialName("topApps") val topApps: List<AppStat> = emptyList(),
+    @SerialName("topPorts") val topPorts: List<PortStat> = emptyList()
+)

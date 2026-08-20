@@ -216,15 +216,18 @@ object XrayConfigManager {
 
         if (customBlock.isNotEmpty()) {
             val (d, i) = splitDomainsAndIps(customBlock)
-            routingRules.add(RoutingRule(action = "block", domains = d.ifEmpty { null }, ips = i.ifEmpty { null }))
+            if (d.isNotEmpty()) routingRules.add(RoutingRule(action = "block", domains = d))
+            if (i.isNotEmpty()) routingRules.add(RoutingRule(action = "block", ips = i))
         }
         if (customDirect.isNotEmpty()) {
             val (d, i) = splitDomainsAndIps(customDirect)
-            routingRules.add(RoutingRule(action = "direct", domains = d.ifEmpty { null }, ips = i.ifEmpty { null }))
+            if (d.isNotEmpty()) routingRules.add(RoutingRule(action = "direct", domains = d))
+            if (i.isNotEmpty()) routingRules.add(RoutingRule(action = "direct", ips = i))
         }
         if (customProxy.isNotEmpty()) {
             val (d, i) = splitDomainsAndIps(customProxy)
-            routingRules.add(RoutingRule(action = "proxy", domains = d.ifEmpty { null }, ips = i.ifEmpty { null }))
+            if (d.isNotEmpty()) routingRules.add(RoutingRule(action = "proxy", domains = d))
+            if (i.isNotEmpty()) routingRules.add(RoutingRule(action = "proxy", ips = i))
         }
 
         // 4d. Presets from Sentinel-Core Builtin Single Source of Truth
@@ -260,12 +263,28 @@ object XrayConfigManager {
                 }
 
                 val fullPreset = SentinelCore.getPreset(presetId) ?: p
-                if (!fullPreset.domains.isNullOrEmpty() || !fullPreset.ips.isNullOrEmpty() || !fullPreset.protocols.isNullOrEmpty()) {
+                if (!fullPreset.domains.isNullOrEmpty()) {
                     routingRules.add(
                         RoutingRule(
                             action = target,
                             domains = fullPreset.domains,
+                            protocols = fullPreset.protocols
+                        )
+                    )
+                }
+                if (!fullPreset.ips.isNullOrEmpty()) {
+                    routingRules.add(
+                        RoutingRule(
+                            action = target,
                             ips = fullPreset.ips,
+                            protocols = fullPreset.protocols
+                        )
+                    )
+                }
+                if (fullPreset.domains.isNullOrEmpty() && fullPreset.ips.isNullOrEmpty() && !fullPreset.protocols.isNullOrEmpty()) {
+                    routingRules.add(
+                        RoutingRule(
+                            action = target,
                             protocols = fullPreset.protocols
                         )
                     )

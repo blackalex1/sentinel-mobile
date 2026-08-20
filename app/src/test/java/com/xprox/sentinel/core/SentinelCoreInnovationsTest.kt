@@ -32,6 +32,12 @@ class SentinelCoreInnovationsTest {
             assertEquals("ru", ruPreset.id)
             assertNotNull("RU preset must contain domains or ips", ruPreset.domains ?: ruPreset.ips)
         }
+
+        val ipCheckersPreset = SentinelCore.getPreset("ip_checkers")
+        assertNotNull("ip_checkers preset must be available", ipCheckersPreset)
+        assertEquals("ip_checkers", ipCheckersPreset!!.id)
+        assertTrue("ip_checkers preset must contain domains", ipCheckersPreset.domains?.isNotEmpty() == true)
+        assertTrue("ip_checkers preset should not contain DNS IPs", ipCheckersPreset.ips.isNullOrEmpty())
     }
 
     @Test
@@ -87,5 +93,55 @@ class SentinelCoreInnovationsTest {
         val nonConnLog = "[Info] xray.com/core/app/proxyman/inbound: connection closed"
         val skipped = SentinelCore.parseConnectionLog(nonConnLog)
         assertTrue("Non-connection log lines must return null", skipped == null)
+    }
+
+    @Test
+    fun testNativeBatchPing() {
+        val targets = listOf(
+            com.xprox.sentinel.core.models.PingTarget(id = "target-1", address = "127.0.0.1", port = 80),
+            com.xprox.sentinel.core.models.PingTarget(id = "target-2", address = "1.1.1.1", port = 53)
+        )
+        val results = SentinelCore.batchPing(targets, timeoutMs = 1000)
+        assertEquals(2, results.size)
+        assertEquals("target-1", results[0].id)
+        assertEquals("target-2", results[1].id)
+    }
+
+    @Test
+    fun testNativeAndroidRingBufferAndStats() {
+        SentinelCore.clearLogs()
+
+        val entry1 = com.xprox.sentinel.core.models.AndroidLogEntry(
+            packageName = "org.telegram.messenger",
+            appName = "Telegram",
+            destinationIp = "149.154.167.50",
+            destinationPort = 443,
+            protocol = "TCP",
+            serviceName = "HTTPS",
+            action = "direct"
+        )
+        val entry2 = com.xprox.sentinel.core.models.AndroidLogEntry(
+            packageName = "com.google.android.youtube",
+            appName = "YouTube",
+            destinationIp = "172.217.16.206",
+            destinationPort = 80,
+            protocol = "TCP",
+            serviceName = "HTTP",
+            action = "direct"
+        )
+
+        SentinelCore.pushLog(entry1)
+        SentinelCore.pushLog(entry2)
+
+        val logs = SentinelCore.getLogs(limit = 10)
+        assertTrue("RingBuffer must contain at least 2 logs", logs.size >= 2)
+
+        val stats = SentinelCore.getLogStats()
+        assertTrue("Stats totalConnections must be at least 2", stats.totalConnections >= 2)
+
+        // Clear and verify
+        SentinelCore.clearLogs()
+        val clearedLogs = SentinelCore.getLogs(limit = 10)
+        assertEquals(0, clearedLogs.size)
     }
 }

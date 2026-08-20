@@ -108,7 +108,7 @@ object XrayProfilePersistence {
         if (jsonStr.isNullOrEmpty()) {
             val defaultDirect = XrayConfigManager.ServerProfile(
                 id = UUID.randomUUID().toString(),
-                name = "Анализ трафика (Без VPN)",
+                name = "Анализ трафика",
                 address = "",
                 port = 0,
                 type = "DIRECT",

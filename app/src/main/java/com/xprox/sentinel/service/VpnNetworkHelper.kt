@@ -27,6 +27,17 @@ object VpnNetworkHelper {
             return
         }
         CoroutineScope(Dispatchers.IO).launch {
+            val results = com.xprox.sentinel.core.SentinelCore.batchPing(
+                listOf(com.xprox.sentinel.core.models.PingTarget(id = profile.id, address = profile.address, port = profile.port)),
+                timeoutMs = 2000
+            )
+            val first = results.firstOrNull()
+            if (first != null && first.success) {
+                pingMsFlow.value = first.latencyMs.toInt()
+                return@launch
+            }
+
+            // Fallback: direct socket connect
             val measuredPing = try {
                 val ipToPing = try {
                     InetAddress.getByName(profile.address).hostAddress
@@ -79,12 +90,17 @@ object VpnNetworkHelper {
         username: String? = null,
         token: String? = null
     ): String? = withContext(Dispatchers.IO) {
-        // Primary fastest & most reliable services chosen by user
+        // 1. Primary: Native Sentinel-Core High-Speed Parallel IP Engine
+        val nativeInfo = com.xprox.sentinel.core.SentinelCore.getPublicIP(socksPort, timeoutMs = 2500)
+        if (nativeInfo != null && nativeInfo.ip.isNotEmpty()) {
+            return@withContext nativeInfo.ip
+        }
+
+        // 2. Fallback: Kotlin coroutines race
         val primaryEndpoints = listOf(
             "https://ipwho.is/?output=text",
             "https://ifconfig.co/ip"
         )
-        // Fallback endpoints in case primary are unreachable
         val fallbackEndpoints = listOf(
             "https://api.ipify.org",
             "https://checkip.amazonaws.com"
@@ -104,12 +120,10 @@ object VpnNetworkHelper {
             Proxy.NO_PROXY
         }
 
-        // 1. Race primary endpoints concurrently
         val primaryJobs = primaryEndpoints.map { url ->
             async { fetchSingleEndpoint(url, proxy, timeoutMs = 2500) }
         }
 
-        // Pick first non-null result
         for (job in primaryJobs) {
             val res = job.await()
             if (!res.isNullOrEmpty()) {
@@ -118,7 +132,6 @@ object VpnNetworkHelper {
             }
         }
 
-        // 2. If primary failed, try fallback endpoints
         for (url in fallbackEndpoints) {
             val res = fetchSingleEndpoint(url, proxy, timeoutMs = 3000)
             if (!res.isNullOrEmpty()) {
