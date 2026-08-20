@@ -1,18 +1,17 @@
 package com.xprox.sentinel.service
 
 import android.net.TrafficStats
+import com.xprox.sentinel.core.SentinelCore
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.StateFlow
 
+/**
+ * High performance VPN traffic speed monitor.
+ * Delegates speed formatting to SentinelCore native engine.
+ */
 object VpnSpeedMonitor {
     fun formatSpeed(bytesPerSec: Long): String {
-        return if (bytesPerSec < 1024) {
-            "$bytesPerSec B/s"
-        } else if (bytesPerSec < 1024 * 1024) {
-            String.format(java.util.Locale.US, "%.1f KB/s", bytesPerSec / 1024.0)
-        } else {
-            String.format(java.util.Locale.US, "%.1f MB/s", bytesPerSec / (1024.0 * 1024.0))
-        }
+        return SentinelCore.formatTrafficSpeed(bytesPerSec, 0L).substringAfter("↓ ").substringBefore("  |")
     }
 
     fun start(
@@ -26,9 +25,6 @@ object VpnSpeedMonitor {
             var lastTxBytes = TrafficStats.getUidTxBytes(myUid)
             var lastTime = System.currentTimeMillis()
 
-            // Use isActive (coroutine cancellation) instead of isRunningFlow.value so
-            // the loop exits immediately when serviceScope is cancelled rather than
-            // waiting up to 1500 ms for the next while-condition check.
             while (isActive && isRunningFlow.value) {
                 delay(1500)
                 if (!isActive || !isRunningFlow.value) break
@@ -50,7 +46,7 @@ object VpnSpeedMonitor {
                         0L
                     }
 
-                    val speedText = "↓ ${formatSpeed(rxSpeed)}  |  ↑ ${formatSpeed(txSpeed)}"
+                    val speedText = SentinelCore.formatTrafficSpeed(rxSpeed, txSpeed)
                     onSpeedUpdated(speedText)
                 }
 

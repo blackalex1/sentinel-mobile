@@ -238,63 +238,38 @@ object XrayConfigManager {
             routingRules.add(RoutingRule(action = "direct", ips = listOf("geoip:private")))
         }
 
-        // RU Sites preset from Sentinel-Core
-        if (isBypassRu) {
-            val ruAction = quickPrefs.getString("action_ru", "DIRECT")?.lowercase() ?: "direct"
-            val target = if (ruAction == "blocked" || ruAction == "block") "block" else if (ruAction == "vpn" || ruAction == "proxy") "proxy" else "direct"
-            val preset = SentinelCore.getPreset("ru")
-            if (preset != null) {
-                routingRules.add(RoutingRule(action = target, domains = preset.domains, ips = preset.ips))
-            }
-        }
+        // Dynamically fetch and compile rules for all atomic presets from Sentinel-Core Engine (Single Source of Truth)
+        val corePresets = SentinelCore.listPresets()
 
-        // Torrents preset from Sentinel-Core
-        if (isBypassTorrents) {
-            val btAction = quickPrefs.getString("action_bt", "BLOCKED")?.lowercase() ?: "block"
-            val target = if (btAction == "direct") "direct" else if (btAction == "vpn" || btAction == "proxy") "proxy" else "block"
-            val preset = SentinelCore.getPreset("bittorrent")
-            if (preset != null) {
-                routingRules.add(RoutingRule(action = target, protocols = preset.protocols))
+        for (p in corePresets) {
+            val presetId = p.id
+            val isEnabled = when (presetId) {
+                "ru" -> isBypassRu
+                "bittorrent" -> isBypassTorrents
+                "ip_checkers" -> quickPrefs.getBoolean("enabled_$presetId", true)
+                else -> quickPrefs.getBoolean("enabled_$presetId", false)
             }
-        }
 
-        // Ads preset from Sentinel-Core
-        if (quickPrefs.getBoolean("enabled_ads", false)) {
-            val adsAction = quickPrefs.getString("action_ads", "BLOCKED")?.lowercase() ?: "block"
-            val target = if (adsAction == "direct") "direct" else "block"
-            val preset = SentinelCore.getPreset("ads")
-            if (preset != null) {
-                routingRules.add(RoutingRule(action = target, domains = preset.domains))
-            }
-        }
+            if (isEnabled) {
+                val actionKey = if (presetId == "bittorrent") "action_bt" else "action_$presetId"
+                val savedAction = quickPrefs.getString(actionKey, p.defaultTarget)?.lowercase() ?: p.defaultTarget.lowercase()
+                val target = when (savedAction) {
+                    "blocked", "block" -> "block"
+                    "vpn", "proxy" -> "proxy"
+                    else -> "direct"
+                }
 
-        // China preset from Sentinel-Core
-        if (quickPrefs.getBoolean("enabled_cn", false)) {
-            val cnAction = quickPrefs.getString("action_cn", "BLOCKED")?.lowercase() ?: "block"
-            val target = if (cnAction == "direct") "direct" else if (cnAction == "vpn" || cnAction == "proxy") "proxy" else "block"
-            val preset = SentinelCore.getPreset("cn")
-            if (preset != null) {
-                routingRules.add(RoutingRule(action = target, domains = preset.domains, ips = preset.ips))
-            }
-        }
-
-        // US preset from Sentinel-Core
-        if (quickPrefs.getBoolean("enabled_us", false)) {
-            val usAction = quickPrefs.getString("action_us", "BLOCKED")?.lowercase() ?: "block"
-            val target = if (usAction == "direct") "direct" else if (usAction == "vpn" || usAction == "proxy") "proxy" else "block"
-            val preset = SentinelCore.getPreset("us")
-            if (preset != null) {
-                routingRules.add(RoutingRule(action = target, domains = preset.domains, ips = preset.ips))
-            }
-        }
-
-        // IP Checkers preset from Sentinel-Core
-        if (quickPrefs.getBoolean("enabled_ip_service", true)) {
-            val ipAction = quickPrefs.getString("action_ip_service", "DIRECT")?.lowercase() ?: "direct"
-            val target = if (ipAction == "vpn" || ipAction == "proxy") "proxy" else "direct"
-            val preset = SentinelCore.getPreset("ip_checkers")
-            if (preset != null) {
-                routingRules.add(RoutingRule(action = target, domains = preset.domains))
+                val fullPreset = SentinelCore.getPreset(presetId) ?: p
+                if (!fullPreset.domains.isNullOrEmpty() || !fullPreset.ips.isNullOrEmpty() || !fullPreset.protocols.isNullOrEmpty()) {
+                    routingRules.add(
+                        RoutingRule(
+                            action = target,
+                            domains = fullPreset.domains,
+                            ips = fullPreset.ips,
+                            protocols = fullPreset.protocols
+                        )
+                    )
+                }
             }
         }
 

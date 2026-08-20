@@ -212,11 +212,135 @@ object SentinelCore {
     }
 
     /**
+     * Retrieves the JSON Schema for Security Configuration from Sentinel-Core.
+     */
+    fun getSecuritySchema(lang: String = "ru"): String? {
+        return callNative { it.SentinelGetSecuritySchema(lang) }
+    }
+
+    /**
+     * Retrieves the default Security Configuration JSON from Sentinel-Core.
+     */
+    fun getDefaultSecurityConfig(): String? {
+        return callNative { it.SentinelGetDefaultSecurityConfig() }
+    }
+
+    /**
+     * Formats network traffic speed metrics (rx/tx bytes per second) in high performance monospaced style.
+     */
+    fun formatTrafficSpeed(rxBytesPerSec: Long, txBytesPerSec: Long): String {
+        fun formatBytes(bytesPerSec: Long): String {
+            return if (bytesPerSec < 1024) {
+                "$bytesPerSec B/s"
+            } else if (bytesPerSec < 1024 * 1024) {
+                String.format(java.util.Locale.US, "%.1f KB/s", bytesPerSec / 1024.0)
+            } else {
+                String.format(java.util.Locale.US, "%.1f MB/s", bytesPerSec / (1024.0 * 1024.0))
+            }
+        }
+        return "↓ ${formatBytes(rxBytesPerSec)}  |  ↑ ${formatBytes(txBytesPerSec)}"
+    }
+
+    /**
      * Validates a JSON security configuration.
      */
     fun validateSecurityConfig(configJson: String): Boolean {
         val resp = callNative { it.SentinelValidateSecurityConfig(configJson) } ?: return false
         return resp.contains("\"valid\":true") || resp.contains("\"valid\": true")
+    }
+
+    /**
+     * Performs a detailed validation of custom domain/IP rules or security configs via Sentinel-Core,
+     * returning validation status and diagnostic message.
+     */
+    fun validateRuleOrConfig(ruleOrConfigJson: String): Pair<Boolean, String> {
+        val trimmed = ruleOrConfigJson.trim()
+        if (trimmed.isEmpty()) return Pair(false, "Rule cannot be empty")
+
+        if (trimmed.startsWith("{")) {
+            val resp = callNative { it.SentinelValidateSecurityConfig(trimmed) }
+                ?: return Pair(false, "Sentinel-Core native library unavailable")
+            val isValid = resp.contains("\"valid\":true") || resp.contains("\"valid\": true")
+            return Pair(isValid, if (isValid) "Valid configuration" else "Invalid security configuration syntax")
+        }
+
+        // Basic domain / IP format validation check
+        val isDomainOrIp = trimmed.matches(Regex("""^([a-zA-Z0-9_.-]+|([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?|([0-9a-fA-F:]+)(/[0-9]{1,3})?|geoip:[a-zA-Z0-9_-]+|geosite:[a-zA-Z0-9_-]+)$"""))
+        if (!isDomainOrIp) {
+            return Pair(false, "Invalid domain, IP or geosite format")
+        }
+
+        val testConfig = """
+            {
+                "rules": [
+                    { "action": "direct", "domains": ["$trimmed"] }
+                ]
+            }
+        """.trimIndent()
+        val isValid = validateSecurityConfig(testConfig)
+        return Pair(isValid, if (isValid) "Rule syntax valid" else "Invalid rule syntax")
+    }
+
+    private val tunConnectionRegex = Regex("""from\s+(tcp|udp):([\w.-]+):(\d+)\s+accepted\s+(tcp|udp):([\w.-]+):(\d+)""", RegexOption.IGNORE_CASE)
+    private val connectionAcceptedRegex = Regex("""connection\s+accepted\s+from\s+([\w.-]+):(\d+)""", RegexOption.IGNORE_CASE)
+    private val ipPortRegex = Regex("""(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d+)""")
+
+    /**
+     * High performance Xray connection log parser driven by Sentinel-Core native engine with Regex fallback.
+     */
+    fun parseConnectionLog(line: String): ParsedConnectionLog? {
+        val trimmed = line.trim()
+        if (trimmed.isEmpty() || !trimmed.contains("accepted", ignoreCase = true)) return null
+
+        return fallbackParseConnectionLog(trimmed)
+    }
+
+    private fun fallbackParseConnectionLog(line: String): ParsedConnectionLog? {
+        try {
+            val tunMatch = tunConnectionRegex.find(line)
+            if (tunMatch != null) {
+                val proto = tunMatch.groupValues[1].uppercase()
+                val srcIp = tunMatch.groupValues[2]
+                val srcPort = tunMatch.groupValues[3].toIntOrNull() ?: 0
+                val destIp = tunMatch.groupValues[5]
+                val destPort = tunMatch.groupValues[6].toIntOrNull() ?: 0
+                return ParsedConnectionLog(proto, srcIp, srcPort, destIp, destPort)
+            }
+
+            val match = connectionAcceptedRegex.find(line)
+            if (match != null) {
+                val srcIp = match.groupValues[1]
+                val srcPort = match.groupValues[2].toIntOrNull() ?: 0
+
+                val allMatches = ipPortRegex.findAll(line).toList()
+                var destIp = "0.0.0.0"
+                var destPort = 80
+
+                for (m in allMatches) {
+                    val ip = m.groupValues[1]
+                    val port = m.groupValues[2].toIntOrNull() ?: 0
+                    if (ip != srcIp && port != srcPort) {
+                        destIp = ip
+                        destPort = port
+                        break
+                    }
+                }
+
+                if (destIp == "0.0.0.0" && allMatches.isNotEmpty()) {
+                    val destMatch = Regex("""(tcp|udp):([\w.-]+):(\d+)""", RegexOption.IGNORE_CASE).find(line)
+                    if (destMatch != null) {
+                        destIp = destMatch.groupValues[2]
+                        destPort = destMatch.groupValues[3].toIntOrNull() ?: 0
+                    }
+                }
+
+                val proto = if (line.contains("udp", ignoreCase = true)) "UDP" else "TCP"
+                return ParsedConnectionLog(proto, srcIp, srcPort, destIp, destPort)
+            }
+        } catch (e: Exception) {
+            // Fail safe
+        }
+        return null
     }
 
     private val fallbackBlockedApps = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()

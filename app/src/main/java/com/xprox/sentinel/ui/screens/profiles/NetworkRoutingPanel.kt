@@ -1,6 +1,7 @@
 package com.xprox.sentinel.ui.screens.profiles
 
 import android.content.Context
+import android.widget.Toast
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
@@ -13,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import com.xprox.sentinel.core.SentinelCore
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -512,9 +514,15 @@ fun NetworkRoutingPanel(
 
                     IconButton(
                         onClick = {
-                            if (customInputText.isNotBlank()) {
-                                onAddCustomRule(selectedTarget, customInputText.trim())
-                                customInputText = ""
+                            val rule = customInputText.trim()
+                            if (rule.isNotBlank()) {
+                                val (isValid, errorMsg) = SentinelCore.validateRuleOrConfig(rule)
+                                if (isValid) {
+                                    onAddCustomRule(selectedTarget, rule)
+                                    customInputText = ""
+                                } else {
+                                    Toast.makeText(context, "Ошибка валидации правила: $errorMsg", Toast.LENGTH_SHORT).show()
+                                }
                             }
                         },
                         modifier = Modifier

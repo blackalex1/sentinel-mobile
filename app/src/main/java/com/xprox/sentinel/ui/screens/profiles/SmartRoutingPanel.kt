@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -19,9 +20,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.xprox.sentinel.service.VpnManagerService
 import com.xprox.sentinel.config.XrayProfilePersistence
+import com.xprox.sentinel.core.SentinelCore
 import com.xprox.sentinel.data.LanguageManager
+import com.xprox.sentinel.service.VpnManagerService
 import com.xprox.sentinel.theme.*
 import com.xprox.sentinel.ui.components.DoppelrandCard
 
@@ -57,18 +59,8 @@ fun SmartRoutingPanel(
 
     val prefs = remember { context.getSharedPreferences("sentinel_quick_actions_prefs", Context.MODE_PRIVATE) }
 
-    var actionBt by remember { mutableStateOf(parseQuickAction(prefs.getString("action_bt", null), QuickAction.BLOCKED)) }
-    var actionAds by remember { mutableStateOf(parseQuickAction(prefs.getString("action_ads", null), QuickAction.BLOCKED)) }
-    var actionCn by remember { mutableStateOf(parseQuickAction(prefs.getString("action_cn", null), QuickAction.BLOCKED)) }
-    var actionRu by remember { mutableStateOf(parseQuickAction(prefs.getString("action_ru", null), QuickAction.DIRECT)) }
-    var actionUs by remember { mutableStateOf(parseQuickAction(prefs.getString("action_us", null), QuickAction.BLOCKED)) }
-    var actionIpService by remember { mutableStateOf(parseQuickAction(prefs.getString("action_ip_service", null), QuickAction.DIRECT)) }
-    var actionLan by remember { mutableStateOf(parseQuickAction(prefs.getString("action_lan", null), QuickAction.DIRECT)) }
-
-    var enabledAds by remember { mutableStateOf(prefs.getBoolean("enabled_ads", false)) }
-    var enabledCn by remember { mutableStateOf(prefs.getBoolean("enabled_cn", false)) }
-    var enabledUs by remember { mutableStateOf(prefs.getBoolean("enabled_us", false)) }
-    var enabledIpService by remember { mutableStateOf(prefs.getBoolean("enabled_ip_service", true)) }
+    // Fetch dynamic atomic routing presets directly from Sentinel-Core Go engine (Single Source of Truth)
+    val corePresets = remember { SentinelCore.listPresets() }
 
     var sniffingEnabled by remember { mutableStateOf(XrayProfilePersistence.loadSniffingEnabled(context)) }
     var sniffHttp by remember { mutableStateOf(XrayProfilePersistence.loadSniffHttp(context)) }
@@ -102,7 +94,7 @@ fun SmartRoutingPanel(
         // Section Header
         item {
             Text(
-                text = if (isRu) "⚡ БЫСТРЫЕ ПРАВИЛА БЕЗОПАСНОСТИ РЕГИОНОВ И КАТЕГОРИЙ" else "⚡ QUICK REGIONAL & SECURITY CATEGORY RULES",
+                text = if (isRu) "⚡ АТОМАРНЫЕ ПРАВИЛА МАРШРУТИЗАЦИИ (SENTINEL-CORE)" else "⚡ ATOMIC ROUTING PRESETS (SENTINEL-CORE)",
                 fontSize = 10.5.sp,
                 fontWeight = FontWeight.Bold,
                 color = ElectricViolet,
@@ -278,131 +270,62 @@ fun SmartRoutingPanel(
             }
         }
 
-        // Rule 1: BitTorrent трафик
-        item {
-            QuickSecurityRuleCard(
-                title = if (isRu) "BitTorrent трафик" else "BitTorrent Traffic",
-                description = if (isRu) "Торрент-трафик и трекеры" else "P2P torrent traffic and trackers",
-                badgeText = "BITTORRENT & 430+ TRACKERS",
-                isChecked = bypassTorrents,
-                action = actionBt,
-                onCheckedChange = onBypassTorrentsChange,
-                onActionSelect = {
-                    actionBt = it
-                    saveAction("action_bt", it)
-                }
-            )
-        }
+        // Dynamic Atomic Presets from Sentinel-Core Engine ONLY (100% Core Driven)
+        items(corePresets, key = { it.id }) { preset ->
+            val defaultEnabled = when (preset.id) {
+                "ru" -> bypassRu
+                "bittorrent" -> bypassTorrents
+                "ip_checkers" -> true
+                else -> false
+            }
 
-        // Rule 2: Реклама и трекеры
-        item {
+            val isChecked = prefs.getBoolean("enabled_${preset.id}", defaultEnabled)
+            val actionKey = if (preset.id == "bittorrent") "action_bt" else "action_${preset.id}"
+            val savedActionStr = prefs.getString(actionKey, null)
+            val currentAction = parseQuickAction(savedActionStr, parseQuickAction(preset.defaultTarget, QuickAction.DIRECT))
+
+            var isRuleChecked by remember(isChecked) { mutableStateOf(isChecked) }
+            var ruleAction by remember(currentAction) { mutableStateOf(currentAction) }
+
+            val badge = "${preset.id.uppercase()} PRESET"
+
             QuickSecurityRuleCard(
-                title = if (isRu) "Реклама и трекеры" else "Ads & Analytics Trackers",
-                description = if (isRu) "AdBlock geosite категории" else "AdBlock geosite categories",
-                badgeText = "ADBLOCK GEOSITE CATEGORIES",
-                isChecked = enabledAds,
-                action = actionAds,
-                onCheckedChange = {
-                    enabledAds = it
-                    saveEnabled("enabled_ads", it)
+                title = preset.name,
+                description = preset.description,
+                badgeText = badge,
+                isChecked = isRuleChecked,
+                action = ruleAction,
+                onCheckedChange = { checked ->
+                    isRuleChecked = checked
+                    saveEnabled("enabled_${preset.id}", checked)
+
+                    if (preset.id == "ru") onBypassRuChange(checked)
+                    if (preset.id == "bittorrent") onBypassTorrentsChange(checked)
+
+                    notifyReload()
                 },
-                onActionSelect = {
-                    actionAds = it
-                    saveAction("action_ads", it)
+                onActionSelect = { act ->
+                    ruleAction = act
+                    saveAction(actionKey, act)
+                    notifyReload()
                 }
             )
         }
 
-        // Rule 3: Сайты Китая (CN)
-        item {
-            QuickSecurityRuleCard(
-                title = if (isRu) "Сайты Китая (CN)" else "China Sites (CN)",
-                description = if (isRu) "Все IP и сайты Китая" else "All China IP addresses and .cn domains",
-                badgeText = "CHINA GEOSITE & GEOIP",
-                isChecked = enabledCn,
-                action = actionCn,
-                onCheckedChange = {
-                    enabledCn = it
-                    saveEnabled("enabled_cn", it)
-                },
-                onActionSelect = {
-                    actionCn = it
-                    saveAction("action_cn", it)
-                }
-            )
-        }
-
-        // Rule 4: Сайты России (RU)
-        item {
-            QuickSecurityRuleCard(
-                title = if (isRu) "Сайты России (RU)" else "Russia Sites (RU)",
-                description = if (isRu) "Госуслуги, Яндекс, банки и VK идут напрямую мимо VPN" else "Gosuslugi, Yandex, banks and VK bypass VPN directly",
-                badgeText = "60+ RU SERVICES BYPASS",
-                isChecked = bypassRu,
-                action = actionRu,
-                onCheckedChange = onBypassRuChange,
-                onActionSelect = {
-                    actionRu = it
-                    saveAction("action_ru", it)
-                }
-            )
-        }
-
-        // Rule 5: Сайты США (US)
-        item {
-            QuickSecurityRuleCard(
-                title = if (isRu) "Сайты США (US)" else "USA Sites (US)",
-                description = if (isRu) "Все IP и сайты США" else "All USA IP addresses and .us domains",
-                badgeText = "USA GEOSITE & GEOIP",
-                isChecked = enabledUs,
-                action = actionUs,
-                onCheckedChange = {
-                    enabledUs = it
-                    saveEnabled("enabled_us", it)
-                },
-                onActionSelect = {
-                    actionUs = it
-                    saveAction("action_us", it)
-                }
-            )
-        }
-
-        // Rule 6: Сервисы определения IP
-        item {
-            QuickSecurityRuleCard(
-                title = if (isRu) "Сервисы определения IP" else "IP Checkers & Detectors",
-                description = if (isRu) "ifconfig, ipwho.is, 2ip, ipify, whoer, browserleaks" else "ifconfig, ipwho.is, 2ip, ipify, whoer, browserleaks",
-                badgeText = "IP CHECKERS",
-                isChecked = enabledIpService,
-                action = actionIpService,
-                onCheckedChange = {
-                    enabledIpService = it
-                    saveEnabled("enabled_ip_service", it)
-                },
-                onActionSelect = {
-                    actionIpService = it
-                    saveAction("action_ip_service", it)
-                }
-            )
-        }
-
-        // Rule 7: Локальная сеть
+        // Rule: Local Private IP Range
         item {
             QuickSecurityRuleCard(
                 title = if (isRu) "Локальная сеть" else "Local Network",
                 description = if (isRu) "Маршрутизация всех частных IP адресов (192.168.x.x / 10.x.x.x)" else "Routing of all private IP ranges (192.168.x.x / 10.x.x.x)",
                 badgeText = "192.168.X.X / 10.X.X.X",
                 isChecked = bypassLan,
-                action = actionLan,
+                action = QuickAction.DIRECT,
                 onCheckedChange = onBypassLanChange,
-                onActionSelect = {
-                    actionLan = it
-                    saveAction("action_lan", it)
-                }
+                onActionSelect = {}
             )
         }
 
-        // Rule 8: Блокировка QUIC (UDP 443)
+        // Rule: QUIC Blocking (UDP 443)
         item {
             DoppelrandCard(
                 modifier = Modifier.fillMaxWidth(),

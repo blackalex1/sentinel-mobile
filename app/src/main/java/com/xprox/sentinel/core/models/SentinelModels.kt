@@ -224,3 +224,12 @@ data class DissectedPacketInfo(
     @SerialName("app_info") val appInfo: String = "",
     @SerialName("extra_metadata") val extraMetadata: Map<String, String> = emptyMap()
 )
+
+@Serializable
+data class ParsedConnectionLog(
+    @SerialName("protocol") val protocol: String = "TCP",
+    @SerialName("src_ip") val srcIp: String = "",
+    @SerialName("src_port") val srcPort: Int = 0,
+    @SerialName("dest_ip") val destIp: String = "",
+    @SerialName("dest_port") val destPort: Int = 0
+)

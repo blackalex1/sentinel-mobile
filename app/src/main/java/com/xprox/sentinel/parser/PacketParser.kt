@@ -1,10 +1,12 @@
 package com.xprox.sentinel.parser
 
+import com.xprox.sentinel.core.SentinelCore
 import java.nio.ByteBuffer
 
 /**
  * Thread-safe utility to parse raw IP and TCP/UDP packets from a TUN interface.
- * Implemented with strict boundaries to ensure zero buffer overflow vulnerabilities.
+ * Delegates binary packet parsing to Sentinel-Core native engine (SentinelCore.dissectPacket)
+ * with a fallback ByteBuffer parser.
  */
 object PacketParser {
 
@@ -14,7 +16,7 @@ object PacketParser {
         val destinationIp: String,
         val sourcePort: Int,
         val destinationPort: Int,
-        // New low-level forensic metrics:
+        // Forensic metrics:
         val ttl: Int,
         val ipLength: Int,
         val ipFlags: String,
@@ -25,23 +27,51 @@ object PacketParser {
     )
 
     fun parse(packetBytes: ByteArray, length: Int): ParsedPacket? {
-        if (length < 20) return null // Minimum IP header length is 20 bytes (IPv4)
+        if (length < 20) return null
+
+        try {
+            val slice = if (length == packetBytes.size) packetBytes else packetBytes.copyOfRange(0, length)
+            val dissected = SentinelCore.dissectPacket(null, slice)
+            if (dissected != null && dissected.sourceIp.isNotEmpty() && dissected.destinationIp.isNotEmpty()) {
+                val protoInt = if (dissected.protocol.equals("UDP", ignoreCase = true)) 17 else 6
+                return ParsedPacket(
+                    protocol = protoInt,
+                    sourceIp = dissected.sourceIp,
+                    destinationIp = dissected.destinationIp,
+                    sourcePort = dissected.sourcePort,
+                    destinationPort = dissected.destinationPort,
+                    ttl = dissected.ttl,
+                    ipLength = dissected.totalLength,
+                    ipFlags = dissected.ipFlags,
+                    tcpFlags = dissected.tcpFlags,
+                    tcpSeq = dissected.tcpSeq,
+                    tcpAck = dissected.tcpAck,
+                    tcpWindow = dissected.tcpWindow
+                )
+            }
+        } catch (e: Exception) {
+            // Fallback to local bytebuffer parser below
+        }
+
+        return fallbackParse(packetBytes, length)
+    }
+
+    private fun fallbackParse(packetBytes: ByteArray, length: Int): ParsedPacket? {
+        if (length < 20) return null
 
         val buffer = ByteBuffer.wrap(packetBytes, 0, length)
         
-        // Parse IP Header Version
         val versionAndIHL = buffer.get(0).toInt()
         val version = (versionAndIHL shr 4) and 0x0F
         
         if (version == 4) {
             val ihl = (versionAndIHL and 0x0F) * 4
-            if (length < ihl) return null // Packet is smaller than specified IP header
+            if (length < ihl) return null
 
             val protocol = buffer.get(9).toInt() and 0xFF
             val ttl = buffer.get(8).toInt() and 0xFF
             val ipLength = buffer.getShort(2).toInt() and 0xFFFF
             
-            // Extract IP Flags (DF, MF) at offset 6 (Bytes 6-7)
             val flagsAndOffset = buffer.getShort(6).toInt() and 0xFFFF
             val df = (flagsAndOffset and 0x4000) != 0
             val mf = (flagsAndOffset and 0x2000) != 0
@@ -52,10 +82,7 @@ object PacketParser {
                 else -> "None"
             }
 
-            // Source IP Offset (Bytes 12-15) - Parse directly without allocating ByteArray(4)
             val sourceIp = "${buffer.get(12).toInt() and 0xFF}.${buffer.get(13).toInt() and 0xFF}.${buffer.get(14).toInt() and 0xFF}.${buffer.get(15).toInt() and 0xFF}"
-
-            // Destination IP Offset (Bytes 16-19) - Parse directly without allocating ByteArray(4)
             val destinationIp = "${buffer.get(16).toInt() and 0xFF}.${buffer.get(17).toInt() and 0xFF}.${buffer.get(18).toInt() and 0xFF}.${buffer.get(19).toInt() and 0xFF}"
 
             var srcPort = 0
@@ -65,27 +92,24 @@ object PacketParser {
             var tcpAck = 0L
             var tcpWindow = 0
 
-            // Parse TCP/UDP Header
-            if (protocol == 6 && length >= ihl + 20) { // TCP Protocol needs at least 20 bytes of TCP header
+            if (protocol == 6 && length >= ihl + 20) {
                 buffer.position(ihl)
                 srcPort = buffer.short.toInt() and 0xFFFF
                 dstPort = buffer.short.toInt() and 0xFFFF
                 tcpSeq = buffer.int.toLong() and 0xFFFFFFFFL
                 tcpAck = buffer.int.toLong() and 0xFFFFFFFFL
                 
-                // TCP Flags are at offset 13 from TCP start (ihl + 13)
                 val flagsByte = buffer.get(ihl + 13).toInt() and 0xFF
                 tcpFlags = buildTcpFlagsString(flagsByte)
                 
-                // Window Size is at offset 14 (ihl + 14)
                 tcpWindow = buffer.getShort(ihl + 14).toInt() and 0xFFFF
-            } else if (protocol == 17 && length >= ihl + 8) { // UDP Protocol
+            } else if (protocol == 17 && length >= ihl + 8) {
                 buffer.position(ihl)
                 srcPort = buffer.short.toInt() and 0xFFFF
                 dstPort = buffer.short.toInt() and 0xFFFF
                 tcpFlags = "N/A (UDP)"
             } else {
-                return null // Not TCP or UDP, or packet truncated
+                return null
             }
 
             return ParsedPacket(
@@ -103,7 +127,7 @@ object PacketParser {
                 tcpWindow = tcpWindow
             )
         } else if (version == 6) {
-            if (length < 40) return null // Minimum IPv6 header is 40 bytes
+            if (length < 40) return null
 
             val payloadLength = buffer.getShort(4).toInt() and 0xFFFF
             val protocol = buffer.get(6).toInt() and 0xFF
@@ -122,27 +146,24 @@ object PacketParser {
             var tcpWindow = 0
 
             val ihl = 40
-            // Parse TCP/UDP Header
-            if (protocol == 6 && length >= ihl + 20) { // TCP Protocol needs at least 20 bytes of TCP header
+            if (protocol == 6 && length >= ihl + 20) {
                 buffer.position(ihl)
                 srcPort = buffer.short.toInt() and 0xFFFF
                 dstPort = buffer.short.toInt() and 0xFFFF
                 tcpSeq = buffer.int.toLong() and 0xFFFFFFFFL
                 tcpAck = buffer.int.toLong() and 0xFFFFFFFFL
                 
-                // TCP Flags are at offset 13 from TCP start (ihl + 13)
                 val flagsByte = buffer.get(ihl + 13).toInt() and 0xFF
                 tcpFlags = buildTcpFlagsString(flagsByte)
                 
-                // Window Size is at offset 14 (ihl + 14)
                 tcpWindow = buffer.getShort(ihl + 14).toInt() and 0xFFFF
-            } else if (protocol == 17 && length >= ihl + 8) { // UDP Protocol
+            } else if (protocol == 17 && length >= ihl + 8) {
                 buffer.position(ihl)
                 srcPort = buffer.short.toInt() and 0xFFFF
                 dstPort = buffer.short.toInt() and 0xFFFF
                 tcpFlags = "N/A (UDP)"
             } else {
-                return null // Not TCP or UDP, or packet truncated
+                return null
             }
 
             return ParsedPacket(
@@ -160,7 +181,7 @@ object PacketParser {
                 tcpWindow = tcpWindow
             )
         } else {
-            return null // Unsupported IP version
+            return null
         }
     }
 
@@ -185,7 +206,7 @@ object PacketParser {
         if ((flagsByte and 0x02) != 0) sb.append("SYN, ")
         if ((flagsByte and 0x01) != 0) sb.append("FIN, ")
         return if (sb.isNotEmpty()) {
-            sb.setLength(sb.length - 2) // remove trailing comma and space
+            sb.setLength(sb.length - 2)
             sb.toString()
         } else {
             "None"
