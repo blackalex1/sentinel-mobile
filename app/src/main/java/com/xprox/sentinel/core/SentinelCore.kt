@@ -15,6 +15,7 @@ object SentinelCore {
     private const val LIB_NAME = "sentinel_core"
 
     interface SentinelCoreLib : Library {
+        fun SentinelGetEngineVersion(): Pointer?
         fun SentinelBuildConfig(specJson: String): Pointer?
         fun SentinelParseURI(rawUri: String): Pointer?
         fun SentinelGenerateURI(profileJson: String): Pointer?
@@ -38,8 +39,8 @@ object SentinelCore {
         fun SentinelAndroidGetBlockedApps(): Pointer?
         fun SentinelAndroidClearThreats(): Pointer?
         fun SentinelBatchPing(targetsJson: String, timeoutMs: Int): Pointer?
-        fun SentinelProxyPing(socksPort: Int, targetUrl: String, timeoutMs: Int): Pointer?
-        fun SentinelGetPublicIP(socksPort: Int, timeoutMs: Int): Pointer?
+        fun SentinelProxyPing(socksPort: Int, authUser: String, authPass: String, targetUrl: String, timeoutMs: Int): Pointer?
+        fun SentinelGetPublicIP(socksPort: Int, authUser: String, authPass: String, timeoutMs: Int): Pointer?
         fun SentinelOptimizeRules(rulesJson: String): Pointer?
         fun SentinelAndroidPushLog(logJson: String): Pointer?
         fun SentinelAndroidGetLogs(limit: Int, offset: Int, portFilter: Int, query: String): Pointer?
@@ -152,7 +153,15 @@ object SentinelCore {
         if (jsonStr.isNullOrEmpty()) return null
 
         return try {
+            if (jsonStr.contains("\"error\"") && !jsonStr.contains("\"protocol\"")) {
+                Log.d(TAG, "Sentinel-Core URI parse skip: $jsonStr")
+                return null
+            }
             val coreProfile = SentinelJson.decodeFromString<CoreServerProfile>(jsonStr)
+            if (coreProfile.address.isEmpty()) {
+                Log.e(TAG, "Sentinel-Core returned empty server address: $jsonStr")
+                return null
+            }
             coreProfile.toAppProfile()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to deserialize parsed URI JSON from Sentinel-Core: $jsonStr", e)
@@ -193,71 +202,6 @@ object SentinelCore {
         }
     }
 
-    private val fallbackPresets = listOf(
-        RoutingPreset(
-            id = "ru",
-            name = "Сайты России (RU)",
-            description = "Все IP и сайты России",
-            defaultTarget = "direct",
-            domains = listOf("geosite:category-ru", "geosite:category-gov-ru", "geosite:yandex", "geosite:vk", "geosite:mailru", "domain:sberbank.ru", "domain:tbank.ru", "domain:tinkoff.ru", "domain:ozon.ru", "domain:wildberries.ru", "domain:2gis.ru", "domain:avito.ru", "regexp:.*\\.ru$", "regexp:.*\\.su$", "regexp:.*\\.рф$", "regexp:.*\\.xn--p1ai$"),
-            ips = listOf("geoip:ru")
-        ),
-        RoutingPreset(
-            id = "ip_checkers",
-            name = "Сервисы определения IP",
-            description = "ipify, 2ip, ifconfig, ipinfo и др.",
-            defaultTarget = "direct",
-            domains = listOf(
-                "domain:ipify.org", "domain:api.ipify.org", "domain:checkip.amazonaws.com",
-                "domain:ifconfig.me", "domain:ifconfig.co", "domain:ifconfig.io",
-                "domain:telega.me", "domain:ipinfo.io", "domain:2ip.ru", "domain:2ip.io",
-                "domain:2ip.ua", "domain:2ip.me", "domain:myip.ru", "domain:myip.com",
-                "domain:icanhazip.com", "domain:wtfismyip.com", "domain:ip.sb",
-                "domain:ipapi.co", "domain:ip-api.com", "domain:ipapi.com", "domain:db-ip.com",
-                "domain:whoer.net", "domain:ipwhois.io", "domain:ipwho.is", "domain:ipaddress.my",
-                "domain:ipaddress.com", "domain:check-host.net", "domain:browserleaks.com",
-                "domain:ip2location.com", "domain:ip2location.io", "domain:showmyip.com",
-                "domain:whatsmyip.org", "domain:whatismyip.com", "domain:whatsmyipaddress.com",
-                "domain:dnsleaktest.com", "domain:ipleak.net", "domain:ip.me", "domain:ip.cn",
-                "domain:ip138.com", "domain:ident.me", "domain:curlmyip.org", "domain:eth0.me",
-                "domain:myexternalip.com", "domain:ip.nf", "domain:trackip.net", "domain:checkip.dyndns.org",
-                "keyword:ipify", "keyword:2ip", "keyword:ipwhois", "keyword:icanhazip",
-                "keyword:ifconfig", "keyword:checkip", "keyword:browserleaks", "keyword:whoer", "keyword:ipleak"
-            )
-        ),
-        RoutingPreset(
-            id = "bittorrent",
-            name = "BitTorrent трафик",
-            description = "Торрент-трафик и трекеры",
-            defaultTarget = "block",
-            protocols = listOf("bittorrent"),
-            domains = listOf("domain:torrent", "domain:tracker", "domain:peerexchange", "keyword:torrent", "keyword:tracker")
-        ),
-        RoutingPreset(
-            id = "ads",
-            name = "Реклама и трекеры",
-            description = "AdBlock geosite категории",
-            defaultTarget = "block",
-            domains = listOf("geosite:category-ads-all")
-        ),
-        RoutingPreset(
-            id = "cn",
-            name = "Сайты Китая (CN)",
-            description = "Все IP и сайты Китая",
-            defaultTarget = "block",
-            domains = listOf("geosite:cn", "regexp:.*\\.cn$"),
-            ips = listOf("geoip:cn")
-        ),
-        RoutingPreset(
-            id = "us",
-            name = "Сайты США (US)",
-            description = "Все IP и сайты США",
-            defaultTarget = "block",
-            domains = listOf("regexp:.*\\.us$"),
-            ips = listOf("geoip:us")
-        )
-    )
-
     /**
      * Lists all available atomic routing presets built into the Sentinel-Core engine.
      */
@@ -275,11 +219,11 @@ object SentinelCore {
                 Log.e(TAG, "Failed to decode presets from Sentinel-Core: $respJson", e)
             }
         }
-        return fallbackPresets
+        return emptyList()
     }
 
     /**
-     * Retrieves detailed information about a specific routing preset.
+     * Retrieves detailed information about a specific routing preset from the Sentinel-Core engine.
      */
     fun getPreset(presetId: String): RoutingPreset? {
         val respJson = callNative { it.SentinelGetPreset(presetId) }
@@ -294,15 +238,14 @@ object SentinelCore {
                 Log.e(TAG, "Failed to decode preset $presetId from Sentinel-Core: $respJson", e)
             }
         }
-        val canonicalId = when (presetId) {
-            "bypass_ru", "block_ru", "smart_ru" -> "ru"
-            "torrent_shield", "block_torrent" -> "bittorrent"
-            "block_ads" -> "ads"
-            "block_cn" -> "cn"
-            "block_us" -> "us"
-            else -> presetId
-        }
-        return fallbackPresets.firstOrNull { it.id == canonicalId }
+        return null
+    }
+
+    /**
+     * Retrieves the version string of the loaded native Sentinel-Core engine.
+     */
+    fun getEngineVersion(): String {
+        return callNative { it.SentinelGetEngineVersion() } ?: "dev"
     }
 
     /**
@@ -744,8 +687,14 @@ object SentinelCore {
     /**
      * Measures real HTTP/TLS handshake latency via SOCKS5 proxy using Sentinel-Core.
      */
-    fun proxyPing(socksPort: Int, targetUrl: String = "http://cp.cloudflare.com/generate_204", timeoutMs: Int = 3000): ProxyPingResult {
-        val respJson = callNative { it.SentinelProxyPing(socksPort, targetUrl, timeoutMs) }
+    fun proxyPing(
+        socksPort: Int,
+        authUsername: String = "",
+        authPassword: String = "",
+        targetUrl: String = "http://cp.cloudflare.com/generate_204",
+        timeoutMs: Int = 3000
+    ): ProxyPingResult {
+        val respJson = callNative { it.SentinelProxyPing(socksPort, authUsername, authPassword, targetUrl, timeoutMs) }
         if (!respJson.isNullOrEmpty()) {
             try {
                 return SentinelJson.decodeFromString<ProxyPingResult>(respJson)
@@ -759,11 +708,23 @@ object SentinelCore {
     /**
      * Concurrently probes multiple trusted IP checking services via optional SOCKS5 proxy in Go.
      */
-    fun getPublicIP(socksPort: Int = 0, timeoutMs: Int = 3500): PublicIPInfo? {
-        val respJson = callNative { it.SentinelGetPublicIP(socksPort, timeoutMs) }
+    fun getPublicIP(
+        socksPort: Int = 0,
+        authUsername: String = "",
+        authPassword: String = "",
+        timeoutMs: Int = 3500
+    ): PublicIPInfo? {
+        val respJson = callNative { it.SentinelGetPublicIP(socksPort, authUsername, authPassword, timeoutMs) }
         if (!respJson.isNullOrEmpty()) {
+            if (respJson.contains("\"error\":") && !respJson.contains("\"ip\":")) {
+                Log.w(TAG, "Public IP lookup error from Sentinel-Core: $respJson")
+                return null
+            }
             try {
-                return SentinelJson.decodeFromString<PublicIPInfo>(respJson)
+                val res = SentinelJson.decodeFromString<PublicIPInfo>(respJson)
+                if (res.ip.isNotEmpty()) {
+                    return res
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to decode public IP info: $respJson", e)
             }
@@ -941,7 +902,9 @@ fun CoreServerProfile.toAppProfile(): XrayConfigManager.ServerProfile {
         host = this.host,
         allowInsecure = this.insecure,
         alpn = this.alpn.joinToString(","),
-        pinnedPeerCertSha256 = this.pinnedPeerCertSha256
+        pinnedPeerCertSha256 = this.pinnedPeerCertSha256,
+        serviceName = this.serviceName,
+        fullJsonConfig = this.rawJsonConfig ?: ""
     )
 }
 
@@ -994,7 +957,9 @@ fun XrayConfigManager.ServerProfile.toCoreProfile(): CoreServerProfile {
         encryption = if (this.encryption.isNotEmpty()) this.encryption else "none",
         path = this.path,
         host = this.host,
+        serviceName = if (this.serviceName.isNotEmpty()) this.serviceName else this.path,
         cipher = if (proto == "shadowsocks") this.path else "",
-        pinnedPeerCertSha256 = this.pinnedPeerCertSha256
+        pinnedPeerCertSha256 = this.pinnedPeerCertSha256,
+        rawJsonConfig = if (this.fullJsonConfig.isNotEmpty()) this.fullJsonConfig else null
     )
 }

@@ -95,6 +95,7 @@ object XrayProfilePersistence {
             json.put("alpn", profile.alpn)
             json.put("headerType", profile.headerType)
             json.put("pinnedPeerCertSha256", profile.pinnedPeerCertSha256)
+            json.put("serviceName", profile.serviceName)
             json.put("fullJsonConfig", profile.fullJsonConfig)
             jsonArray.put(json)
         }
@@ -150,6 +151,7 @@ object XrayProfilePersistence {
                         alpn = json.optString("alpn", ""),
                         headerType = json.optString("headerType", ""),
                         pinnedPeerCertSha256 = json.optString("pinnedPeerCertSha256", ""),
+                        serviceName = json.optString("serviceName", ""),
                         groupId = null,
                         fullJsonConfig = json.optString("fullJsonConfig", "")
                     )

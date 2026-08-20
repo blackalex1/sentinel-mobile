@@ -275,6 +275,8 @@ fun SmartRoutingPanel(
             val defaultEnabled = when (preset.id) {
                 "ru" -> bypassRu
                 "bittorrent" -> bypassTorrents
+                "lan" -> bypassLan
+                "quic" -> blockQuic
                 "ip_checkers" -> true
                 else -> false
             }
@@ -287,7 +289,17 @@ fun SmartRoutingPanel(
             var isRuleChecked by remember(isChecked) { mutableStateOf(isChecked) }
             var ruleAction by remember(currentAction) { mutableStateOf(currentAction) }
 
-            val badge = "${preset.id.uppercase()} PRESET"
+            val badge = when (preset.id) {
+                "ru" -> "GEOSITE / GEOIP: RU"
+                "bittorrent" -> "P2P / TRACKERS"
+                "ads" -> "ADBLOCK CATEGORY"
+                "ip_checkers" -> "IP LOOKUP SERVICES"
+                "lan" -> "192.168.X.X / 10.X.X.X"
+                "quic" -> "HTTP/2 FALLBACK (ANTI-DPI)"
+                "cn" -> "GEOSITE / GEOIP: CN"
+                "us" -> "GEOIP: US"
+                else -> "${preset.id.uppercase()} RULE"
+            }
 
             QuickSecurityRuleCard(
                 title = preset.name,
@@ -301,6 +313,8 @@ fun SmartRoutingPanel(
 
                     if (preset.id == "ru") onBypassRuChange(checked)
                     if (preset.id == "bittorrent") onBypassTorrentsChange(checked)
+                    if (preset.id == "lan") onBypassLanChange(checked)
+                    if (preset.id == "quic") onBlockQuicChange(checked)
 
                     notifyReload()
                 },
@@ -310,75 +324,6 @@ fun SmartRoutingPanel(
                     notifyReload()
                 }
             )
-        }
-
-        // Rule: Local Private IP Range
-        item {
-            QuickSecurityRuleCard(
-                title = if (isRu) "Локальная сеть" else "Local Network",
-                description = if (isRu) "Маршрутизация всех частных IP адресов (192.168.x.x / 10.x.x.x)" else "Routing of all private IP ranges (192.168.x.x / 10.x.x.x)",
-                badgeText = "192.168.X.X / 10.X.X.X",
-                isChecked = bypassLan,
-                action = QuickAction.DIRECT,
-                onCheckedChange = onBypassLanChange,
-                onActionSelect = {}
-            )
-        }
-
-        // Rule: QUIC Blocking (UDP 443)
-        item {
-            DoppelrandCard(
-                modifier = Modifier.fillMaxWidth(),
-                borderColor = if (blockQuic) ElectricViolet.copy(alpha = 0.45f) else DoppelrandShellBorder,
-                contentPadding = PaddingValues(16.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                        Surface(
-                            color = ElectricViolet.copy(alpha = 0.15f),
-                            shape = RoundedCornerShape(100.dp),
-                            border = BorderStroke(1.dp, ElectricViolet.copy(alpha = 0.35f))
-                        ) {
-                            Text(
-                                text = "HTTP/2 FALLBACK (ANTI-DPI)",
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = ElectricViolet,
-                                fontFamily = FontFamily.Monospace,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = if (isRu) "Блокировка QUIC (UDP 443)" else "Block QUIC Protocol (UDP 443)",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextWhite
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = if (isRu) "Принудительно переключает браузеры на HTTP/2 для защиты от глушилок провайдеров" else "Forces browsers to HTTP/2 to prevent ISP DPI throttling",
-                            fontSize = 11.sp,
-                            color = TextGray,
-                            lineHeight = 15.sp
-                        )
-                    }
-                    Switch(
-                        checked = blockQuic,
-                        onCheckedChange = onBlockQuicChange,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = ElectricViolet,
-                            checkedTrackColor = ElectricViolet.copy(alpha = 0.4f),
-                            uncheckedThumbColor = TextGray,
-                            uncheckedTrackColor = CardBorder
-                        )
-                    )
-                }
-            }
         }
     }
 }

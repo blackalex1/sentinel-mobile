@@ -129,6 +129,7 @@ class VpnManagerService : VpnService() {
     private var captureProxyServer: CaptureProxyServer? = null
     private var activeCapturePort: Int = 0
     private var sentinelPairingServer: SentinelPairingServer? = null
+    private var protectServer: ProtectServer? = null
 
     // WakeLock keeps CPU active during VPN session to prevent Doze from killing Xray
     private var wakeLock: PowerManager.WakeLock? = null
@@ -331,6 +332,9 @@ class VpnManagerService : VpnService() {
                     token = lanCreds?.token
                 )
             }
+
+            // Start ProtectServer Unix domain socket for Xray socket protection
+            protectServer = ProtectServer(this).apply { start() }
 
             // 2. Generate/Compile client configuration file
             val configFile = XrayConfigManager.compileSecureConfig(
@@ -693,6 +697,8 @@ class VpnManagerService : VpnService() {
         activeCapturePort = 0
         sentinelPairingServer?.stop()
         sentinelPairingServer = null
+        protectServer?.stop()
+        protectServer = null
 
         XrayProcessManager.stopProcess() // Terminate Xray core subprocess
         

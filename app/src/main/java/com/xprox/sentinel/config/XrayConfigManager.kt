@@ -41,6 +41,7 @@ object XrayConfigManager {
         val alpn: String = "",
         val headerType: String = "",
         val pinnedPeerCertSha256: String = "",
+        val serviceName: String = "",
         val groupId: String? = null,
         val fullJsonConfig: String = ""
     )
@@ -120,17 +121,6 @@ object XrayConfigManager {
         captureProxyPort: Int = 0
     ): File {
         val configFile = File(context.filesDir, SECURE_CONFIG_NAME)
-
-        // Handle raw JSON configuration if provided
-        if (!profile.fullJsonConfig.isNullOrEmpty()) {
-            try {
-                configFile.writeText(profile.fullJsonConfig, Charsets.UTF_8)
-                Log.d(TAG, "Raw JSON configuration written to config file")
-                return configFile
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to write raw JSON config, continuing to compiler", e)
-            }
-        }
 
         // 1. Resolve target core
         val isHysteria = profile.type.equals("HYSTERIA2", ignoreCase = true) || profile.type.equals("HY2", ignoreCase = true)
@@ -235,11 +225,7 @@ object XrayConfigManager {
         val isBypassRu = XrayProfilePersistence.loadBypassRuSites(context)
         val isBypassTorrents = XrayProfilePersistence.loadBypassTorrents(context)
         val isBypassLan = XrayProfilePersistence.loadBypassLan(context)
-
-        // Private LAN isolation
-        if (isBypassLan) {
-            routingRules.add(RoutingRule(action = "direct", ips = listOf("geoip:private")))
-        }
+        val isBlockQuic = XrayProfilePersistence.loadBlockQuic(context)
 
         // Dynamically fetch and compile rules for all atomic presets from Sentinel-Core Engine (Single Source of Truth)
         val corePresets = SentinelCore.listPresets()
@@ -249,6 +235,8 @@ object XrayConfigManager {
             val isEnabled = when (presetId) {
                 "ru" -> isBypassRu
                 "bittorrent" -> isBypassTorrents
+                "lan" -> isBypassLan
+                "quic" -> isBlockQuic
                 "ip_checkers" -> quickPrefs.getBoolean("enabled_$presetId", true)
                 else -> quickPrefs.getBoolean("enabled_$presetId", false)
             }
@@ -268,7 +256,8 @@ object XrayConfigManager {
                         RoutingRule(
                             action = target,
                             domains = fullPreset.domains,
-                            protocols = fullPreset.protocols
+                            protocols = fullPreset.protocols,
+                            ports = fullPreset.ports
                         )
                     )
                 }
@@ -277,15 +266,17 @@ object XrayConfigManager {
                         RoutingRule(
                             action = target,
                             ips = fullPreset.ips,
-                            protocols = fullPreset.protocols
+                            protocols = fullPreset.protocols,
+                            ports = fullPreset.ports
                         )
                     )
                 }
-                if (fullPreset.domains.isNullOrEmpty() && fullPreset.ips.isNullOrEmpty() && !fullPreset.protocols.isNullOrEmpty()) {
+                if (fullPreset.domains.isNullOrEmpty() && fullPreset.ips.isNullOrEmpty() && (!fullPreset.protocols.isNullOrEmpty() || !fullPreset.ports.isNullOrEmpty())) {
                     routingRules.add(
                         RoutingRule(
                             action = target,
-                            protocols = fullPreset.protocols
+                            protocols = fullPreset.protocols,
+                            ports = fullPreset.ports
                         )
                     )
                 }
@@ -313,7 +304,8 @@ object XrayConfigManager {
             serverInbounds = serverInbounds,
             routing = routingSpec,
             dns = dnsSpec,
-            logLevel = "info"
+            logLevel = "info",
+            rawJsonConfig = if (profile.fullJsonConfig.isNotEmpty()) profile.fullJsonConfig else null
         )
 
         // 5. Build configuration via Sentinel-Core Go Engine (Single Source of Truth)

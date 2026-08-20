@@ -26,7 +26,8 @@ data class ConfigSpec(
     @SerialName("logPath") val logPath: String? = null,
     @SerialName("accessLog") val accessLog: String? = null,
     @SerialName("errorLog") val errorLog: String? = null,
-    @SerialName("clashApiAddress") val clashApiAddress: String? = null
+    @SerialName("clashApiAddress") val clashApiAddress: String? = null,
+    @SerialName("rawJsonConfig") val rawJsonConfig: String? = null
 )
 
 @Serializable
@@ -73,7 +74,8 @@ data class CoreServerProfile(
     @SerialName("peerPublicKey") val peerPublicKey: String = "",
     @SerialName("preSharedKey") val preSharedKey: String = "",
     @SerialName("localAddress") val localAddress: List<String> = emptyList(),
-    @SerialName("mtu") val mtu: Int = 0
+    @SerialName("mtu") val mtu: Int = 0,
+    @SerialName("rawJsonConfig") val rawJsonConfig: String? = null
 )
 
 @Serializable
@@ -165,7 +167,8 @@ data class RoutingPreset(
     @SerialName("defaultTarget") val defaultTarget: String = "direct",
     @SerialName("domains") val domains: List<String>? = null,
     @SerialName("ips") val ips: List<String>? = null,
-    @SerialName("protocols") val protocols: List<String>? = null
+    @SerialName("protocols") val protocols: List<String>? = null,
+    @SerialName("ports") val ports: List<String>? = null
 )
 
 @Serializable
@@ -260,13 +263,14 @@ data class ProxyPingResult(
 
 @Serializable
 data class PublicIPInfo(
-    @SerialName("ip") val ip: String,
+    @SerialName("ip") val ip: String = "",
     @SerialName("country") val country: String? = null,
     @SerialName("countryCode") val countryCode: String? = null,
     @SerialName("city") val city: String? = null,
     @SerialName("region") val region: String? = null,
     @SerialName("org") val org: String? = null,
-    @SerialName("asn") val asn: String? = null
+    @SerialName("asn") val asn: String? = null,
+    @SerialName("error") val error: String? = null
 )
 
 @Serializable

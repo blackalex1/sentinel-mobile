@@ -9,12 +9,11 @@ android {
     compileSdk = 36
     defaultConfig {
         applicationId = "com.xprox.sentinel"
-        applicationIdSuffix = ".next"
-        manifestPlaceholders["appName"] = "Sentinel Next"
+        manifestPlaceholders["appName"] = "Sentinel"
         minSdk = 28
         targetSdk = 28
         versionCode = 2
-        versionName = "1.1-next"
+        versionName = "1.1"
     }
 
     buildTypes {

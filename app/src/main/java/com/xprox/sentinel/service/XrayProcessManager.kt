@@ -100,6 +100,13 @@ object XrayProcessManager {
             // Inject local secure asset path variables strictly inside binDir
             builder.environment()["assets"] = binDir.absolutePath
             builder.environment()["xray.location.asset"] = binDir.absolutePath
+
+            // Inject Unix domain socket path for outbound socket protection via VpnService.protect()
+            val protectPath = File(context.filesDir, ProtectServer.PROTECT_SOCKET_NAME).absolutePath
+            builder.environment()["v2ray.protect.path"] = protectPath
+            builder.environment()["xray.protect.path"] = protectPath
+            builder.environment()["V2RAY_PROTECT_PATH"] = protectPath
+            builder.environment()["XRAY_PROTECT_PATH"] = protectPath
             
             if (tunFd != null) {
                 Log.i(TAG, "Duplicating TUN FD $tunFd to parent stdin (FD 0) and inheriting in child")

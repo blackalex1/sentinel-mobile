@@ -103,6 +103,7 @@ object LogManager {
         143 to "IMAP",
         443 to "HTTPS",
         445 to "SMB (Windows Share)",
+        853 to "DNS over TLS (DoT)",
         3389 to "RDP (Remote Desktop)",
         3306 to "MySQL",
         6379 to "Redis",
