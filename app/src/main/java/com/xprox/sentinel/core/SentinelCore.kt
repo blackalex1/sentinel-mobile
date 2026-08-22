@@ -25,7 +25,10 @@ object SentinelCore {
         fun SentinelGetSecuritySchema(lang: String): Pointer?
         fun SentinelGetDefaultSecurityConfig(): Pointer?
         fun SentinelValidateSecurityConfig(configJson: String): Pointer?
-        fun SentinelAndroidAuditConnection(reqJson: String): Pointer?
+        fun SentinelAuditConnection(reqJson: String): Pointer?
+        fun SentinelGetPortShieldCatalog(lang: String): Pointer?
+        fun SentinelConfigureSecurityPolicy(policyJson: String): Pointer?
+        fun SentinelGetSecurityPolicy(): Pointer?
         fun SentinelAndroidWritePcap(filePath: String, rawHex: String, timestampMs: Long): Pointer?
         fun SentinelAndroidSynthesizeAndWritePcap(
             filePath: String, proto: String, srcIP: String, srcPort: Int,
@@ -390,7 +393,7 @@ object SentinelCore {
         if (context != null && !isInitialized) getOrLoadLib(context)
         return try {
             val reqJson = SentinelJson.encodeToString(AndroidAuditRequest.serializer(), request)
-            val respJson = callNative { it.SentinelAndroidAuditConnection(reqJson) }
+            val respJson = callNative { it.SentinelAuditConnection(reqJson) }
             if (respJson != null) {
                 SentinelJson.decodeFromString(AndroidAuditVerdict.serializer(), respJson)
             } else {
@@ -398,6 +401,25 @@ object SentinelCore {
             }
         } catch (e: Exception) {
             fallbackAuditConnection(request)
+        }
+    }
+
+    fun configureSecurityPolicy(context: Context? = null, policyJson: String): Boolean {
+        if (context != null && !isInitialized) getOrLoadLib(context)
+        return try {
+            val resp = callNative { it.SentinelConfigureSecurityPolicy(policyJson) }
+            resp != null && (resp.contains("\"success\": true") || resp.contains("\"success\":true"))
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    fun getSecurityPolicy(context: Context? = null): String? {
+        if (context != null && !isInitialized) getOrLoadLib(context)
+        return try {
+            callNative { it.SentinelGetSecurityPolicy() }
+        } catch (e: Exception) {
+            null
         }
     }
 

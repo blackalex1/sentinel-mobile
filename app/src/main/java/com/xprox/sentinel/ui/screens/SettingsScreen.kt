@@ -151,6 +151,8 @@ fun SettingsScreen() {
                     Spacer(modifier = Modifier.height(14.dp))
                     LocalProxyCard(context = context)
                     Spacer(modifier = Modifier.height(14.dp))
+                    SecurityPolicyCard(context = context)
+                    Spacer(modifier = Modifier.height(14.dp))
                     SensitivePortsCard(context = context)
                     Spacer(modifier = Modifier.height(14.dp))
                     BlockedAppsCard(context = context)

@@ -27,11 +27,70 @@ object LogManager {
     private const val PREFS_NAME = "x_prox_sensitive_ports_prefs"
     private const val KEY_ACTIVE_PORTS = "active_sensitive_ports"
 
-    private val DEFAULT_ACTIVE_PORTS = setOf(21, 22, 23, 25, 110, 143, 445, 3389, 3306, 6379, 27017)
+    private val DEFAULT_ACTIVE_PORTS = emptySet<Int>()
     private var activePortsSet: Set<Int> = emptySet()
 
-    private const val KEY_CUSTOM_PORTS = "custom_sensitive_ports"
-    private var customPortsMap: Map<Int, String>? = null
+    private const val KEY_SHIELD_MODE = "security_shield_mode"
+    private const val KEY_BLOCK_THRESHOLD = "security_block_threshold"
+    private const val KEY_AUTO_PCAP = "security_auto_pcap"
+
+    fun loadShieldMode(context: Context): String {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getString(KEY_SHIELD_MODE, "threshold_block") ?: "threshold_block"
+    }
+
+    fun saveShieldMode(context: Context, mode: String) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(KEY_SHIELD_MODE, mode).apply()
+        syncPolicyWithNativeCore(context)
+    }
+
+    fun loadBlockThreshold(context: Context): Int {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getInt(KEY_BLOCK_THRESHOLD, 3)
+    }
+
+    fun saveBlockThreshold(context: Context, threshold: Int) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putInt(KEY_BLOCK_THRESHOLD, threshold).apply()
+        syncPolicyWithNativeCore(context)
+    }
+
+    fun loadAutoPcap(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(KEY_AUTO_PCAP, true)
+    }
+
+    fun saveAutoPcap(context: Context, auto: Boolean) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(KEY_AUTO_PCAP, auto).apply()
+        syncPolicyWithNativeCore(context)
+    }
+
+    fun syncPolicyWithNativeCore(context: Context) {
+        try {
+            val mode = loadShieldMode(context)
+            val blockThreshold = loadBlockThreshold(context)
+            val autoPcap = loadAutoPcap(context)
+            val activePorts = loadActivePorts(context).toList()
+            val pcapDir = File(context.filesDir, "threat_pcaps").apply { mkdirs() }.absolutePath
+
+            val json = org.json.JSONObject().apply {
+                put("mode", mode)
+                put("block_threshold", blockThreshold)
+                put("pcap_threshold", 3)
+                put("port_scan_threshold", 5)
+                put("window_seconds", 30)
+                put("auto_pcap_capture", autoPcap)
+                put("pcap_directory", pcapDir)
+                put("protected_ports", org.json.JSONArray(activePorts))
+            }
+
+            com.xprox.sentinel.core.SentinelCore.configureSecurityPolicy(context, json.toString())
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to sync policy with native core", e)
+        }
+    }
 
     fun loadCustomPorts(context: Context): Map<Int, String> {
         customPortsMap?.let { return it }
