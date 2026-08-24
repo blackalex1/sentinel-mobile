@@ -1,6 +1,8 @@
 package com.xprox.sentinel.service
 
 import android.content.Context
+import android.content.Intent
+import android.os.Build
 import android.util.Log
 import com.xprox.sentinel.config.XrayProfilePersistence
 import org.json.JSONObject
@@ -193,18 +195,45 @@ class SentinelPairingServer(
                     val responded = latch.await(30, TimeUnit.SECONDS)
 
                     if (responded && userApproved) {
+                        // 1. Automatically enable Hotspot / LAN sharing in persistence
+                        XrayProfilePersistence.saveLanSharing(context, true)
+                        XrayProfilePersistence.saveLanSharingSocks(context, true)
+                        XrayProfilePersistence.saveLanSharingHttp(context, true)
+
+                        // 2. If VPN service is currently running, reload config to bind LAN inbounds immediately
+                        if (VpnManagerService.isRunningFlow.value) {
+                            try {
+                                val reloadIntent = Intent(context, VpnManagerService::class.java).apply {
+                                    action = VpnManagerService.ACTION_RELOAD_CONFIG
+                                }
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                    context.startForegroundService(reloadIntent)
+                                } else {
+                                    context.startService(reloadIntent)
+                                }
+                                Thread.sleep(250)
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed to send reload intent to VpnManagerService", e)
+                            }
+                        }
+
                         val isSocksEnabled = XrayProfilePersistence.loadLanSharingSocks(context)
                         val isHttpEnabled = XrayProfilePersistence.loadLanSharingHttp(context)
                         val proxyType = if (isSocksEnabled) "SOCKS5" else if (isHttpEnabled) "HTTP" else "SOCKS5"
-                        val port = if (proxyType == "SOCKS5") socksPort else httpPort
+                        
+                        val activeLiveSocks = VpnManagerService.activeLanSocksPort.value
+                        val activeLiveHttp = VpnManagerService.activeLanHttpPort.value
+                        val effectiveSocksPort = if (activeLiveSocks > 0) activeLiveSocks else socksPort
+                        val effectiveHttpPort = if (activeLiveHttp > 0) activeLiveHttp else httpPort
+                        val port = if (proxyType == "SOCKS5") effectiveSocksPort else effectiveHttpPort
                         val isAuth = XrayProfilePersistence.loadLanSharingAuth(context)
 
                         val jsonResp = JSONObject().apply {
                             put("success", true)
                             put("proxyType", proxyType)
                             put("port", port)
-                            put("socksPort", socksPort)
-                            put("httpPort", httpPort)
+                            put("socksPort", effectiveSocksPort)
+                            put("httpPort", effectiveHttpPort)
                             put("authRequired", isAuth)
                             if (isAuth && !username.isNullOrEmpty()) put("username", username)
                             if (isAuth && !token.isNullOrEmpty()) put("password", token)
