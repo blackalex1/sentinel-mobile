@@ -167,6 +167,15 @@ fun DashboardScreen(onNavigateToSettings: () -> Unit = {}) {
                 
                 profiles = updatedList
                 XrayProfilePersistence.saveProfiles(context, updatedList)
+
+                if (!XrayProfilePersistence.isInitialProxySyncDone(context)) {
+                    val hasRealProxy = updatedList.any { it.type.uppercase() != "DIRECT" && it.address.isNotEmpty() }
+                    if (hasRealProxy) {
+                        XrayProfilePersistence.saveInitialProxySyncDone(context, true)
+                        XrayProfilePersistence.saveLanSharingSocks(context, true)
+                        XrayProfilePersistence.saveLanSharingHttp(context, true)
+                    }
+                }
                 
                 // Select this profile if editing active, or if it is the first imported profile
                 if (editingProfile?.id == activeProfile.id || editingProfile == null && updatedList.size == 1) {
@@ -360,6 +369,15 @@ fun DashboardScreen(onNavigateToSettings: () -> Unit = {}) {
                             updatedList.addAll(imported)
                             profiles = updatedList
                             XrayProfilePersistence.saveProfiles(context, updatedList)
+
+                            if (!XrayProfilePersistence.isInitialProxySyncDone(context)) {
+                                val hasRealProxy = updatedList.any { it.type.uppercase() != "DIRECT" && it.address.isNotEmpty() }
+                                if (hasRealProxy) {
+                                    XrayProfilePersistence.saveInitialProxySyncDone(context, true)
+                                    XrayProfilePersistence.saveLanSharingSocks(context, true)
+                                    XrayProfilePersistence.saveLanSharingHttp(context, true)
+                                }
+                            }
                             
                             // Automatically set the last imported profile as active
                             val lastImported = imported.last()

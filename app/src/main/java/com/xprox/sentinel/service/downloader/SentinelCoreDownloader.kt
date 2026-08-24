@@ -1,6 +1,7 @@
 package com.xprox.sentinel.service.downloader
 
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.util.Log
 import com.xprox.sentinel.core.SentinelCore
@@ -265,9 +266,7 @@ object SentinelCoreDownloader {
                 .putString(KEY_CUSTOM_CORE_DATE, dateStr)
                 .apply()
 
-            // Hot-reload SentinelCore JNA engine
-            SentinelCore.reload(context)
-            Log.i(TAG, "Sentinel-Core successfully updated to ${release.tagName} and reloaded!")
+            Log.i(TAG, "Sentinel-Core successfully installed ${release.tagName} (restart required to initialize native engine)")
             return@withContext true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to install Sentinel-Core update", e)
@@ -277,7 +276,7 @@ object SentinelCoreDownloader {
     }
 
     /**
-     * Reverts to the bundled core from the APK and reloads JNA.
+     * Reverts to the bundled core from the APK.
      */
     fun revertToBundled(context: Context): Boolean {
         val targetFile = getCustomCoreFile(context)
@@ -290,9 +289,24 @@ object SentinelCoreDownloader {
             .remove(KEY_CUSTOM_CORE_DATE)
             .apply()
 
-        SentinelCore.reload(context)
-        Log.i(TAG, "Reverted to APK bundled Sentinel-Core")
+        Log.i(TAG, "Reverted to APK bundled Sentinel-Core (restart required)")
         return true
+    }
+
+    /**
+     * Gracefully restarts the application to initialize a newly installed or reverted native core.
+     */
+    fun restartApp(context: Context) {
+        try {
+            val packageManager = context.packageManager
+            val intent = packageManager.getLaunchIntentForPackage(context.packageName)
+            val componentName = intent?.component
+            val mainIntent = Intent.makeRestartActivityTask(componentName)
+            context.startActivity(mainIntent)
+            Runtime.getRuntime().exit(0)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to restart app", e)
+        }
     }
 
     private suspend fun downloadSingleFile(

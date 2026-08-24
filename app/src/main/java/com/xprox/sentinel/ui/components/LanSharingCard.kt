@@ -6,6 +6,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,6 +41,7 @@ fun LanSharingCard(context: Context) {
     val activeLanCreds by VpnManagerService.activeLanCredentials.collectAsState()
     val lanHttpPort by VpnManagerService.activeLanHttpPort.collectAsState()
     val lanSocksPort by VpnManagerService.activeLanSocksPort.collectAsState()
+    val activeClient by XrayProfilePersistence.activeHotspotSessionClient.collectAsState()
     val isVpnActive by VpnManagerService.isRunningFlow.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
@@ -241,6 +243,33 @@ fun LanSharingCard(context: Context) {
                         color = TextGray,
                         modifier = Modifier.padding(top = 4.dp)
                     )
+                    if (!activeClient.isNullOrEmpty()) {
+                        Surface(
+                            color = androidx.compose.ui.graphics.Color(0x1A34D399),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, androidx.compose.ui.graphics.Color(0x4D34D399)),
+                            modifier = Modifier.padding(top = 6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(androidx.compose.foundation.shape.CircleShape)
+                                        .background(androidx.compose.ui.graphics.Color(0xFF34D399))
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "ПК подключен: $activeClient",
+                                    fontSize = 11.sp,
+                                    color = androidx.compose.ui.graphics.Color(0xFF34D399),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
                 }
                 Switch(
                     checked = isEnabled,

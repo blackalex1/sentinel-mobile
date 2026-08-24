@@ -699,6 +699,8 @@ class VpnManagerService : VpnService() {
         sentinelPairingServer = null
         protectServer?.stop()
         protectServer = null
+        HotspotNotificationHelper.dismissHotspotProxyingNotification(this)
+        com.xprox.sentinel.config.XrayProfilePersistence.setHotspotActiveSession(null)
 
         XrayProcessManager.stopProcess() // Terminate Xray core subprocess
         

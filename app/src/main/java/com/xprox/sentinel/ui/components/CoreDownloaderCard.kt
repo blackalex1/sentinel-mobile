@@ -62,6 +62,9 @@ fun CoreDownloaderCard(
         }
     }
 
+    var showRestartDialog by remember { mutableStateOf(false) }
+    var restartDialogMessage by remember { mutableStateOf("") }
+
     val triggerInstallRelease: (SentinelReleaseInfo) -> Unit = { targetRelease ->
         isDownloading = true
         downloadStatusText = "${LanguageManager.getString("core_status_updating")} ${targetRelease.tagName}"
@@ -78,7 +81,8 @@ fun CoreDownloaderCard(
             isDownloading = false
             if (success) {
                 activeCoreInfo = SentinelCoreDownloader.getActiveCoreInfo(context)
-                Toast.makeText(context, LanguageManager.getString("core_switch_success"), Toast.LENGTH_SHORT).show()
+                restartDialogMessage = "Ядро Sentinel-Core ${targetRelease.tagName} успешно установлено!\n\nДля применения изменений перезапустите приложение."
+                showRestartDialog = true
             } else {
                 Toast.makeText(context, LanguageManager.getString("core_switch_fail"), Toast.LENGTH_LONG).show()
             }
@@ -277,7 +281,8 @@ fun CoreDownloaderCard(
                         showRevertDialog = false
                         SentinelCoreDownloader.revertToBundled(context)
                         activeCoreInfo = SentinelCoreDownloader.getActiveCoreInfo(context)
-                        Toast.makeText(context, LanguageManager.getString("core_revert_success"), Toast.LENGTH_SHORT).show()
+                        restartDialogMessage = "Возврат к встроенному ядру APK выполнен!\n\nДля применения изменений перезапустите приложение."
+                        showRestartDialog = true
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = WarningRose),
                     shape = RoundedCornerShape(8.dp)
@@ -288,6 +293,56 @@ fun CoreDownloaderCard(
             dismissButton = {
                 TextButton(onClick = { showRevertDialog = false }) {
                     Text(string("cancel"), color = TextGray)
+                }
+            },
+            containerColor = DarkCardElevated
+        )
+    }
+
+    // Required App Restart Dialog after Core switch
+    if (showRestartDialog) {
+        AlertDialog(
+            onDismissRequest = { showRestartDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Restart",
+                        tint = ElectricViolet,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "ПЕРЕЗАГРУЗКА ПРИЛОЖЕНИЯ",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextWhite,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            },
+            text = {
+                Text(
+                    text = restartDialogMessage,
+                    fontSize = 12.5.sp,
+                    color = TextGray
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showRestartDialog = false
+                        SentinelCoreDownloader.restartApp(context)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Перезапустить сейчас", color = TextWhite, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRestartDialog = false }) {
+                    Text("Позже", color = TextGray)
                 }
             },
             containerColor = DarkCardElevated

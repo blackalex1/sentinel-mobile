@@ -56,6 +56,12 @@ object SentinelCore {
     private var activeLib: SentinelCoreLib? = null
     @Volatile
     private var isInitialized = false
+    @Volatile
+    private var appContext: Context? = null
+
+    fun init(context: Context) {
+        appContext = context.applicationContext
+    }
 
     private fun getOrLoadLib(context: Context? = null): SentinelCoreLib? {
         if (isInitialized && activeLib != null) return activeLib
@@ -65,7 +71,8 @@ object SentinelCore {
             val candidates = mutableListOf<String>()
 
             // 1. Priority 1: Check downloaded custom core in app private storage if available
-            context?.let { ctx ->
+            val effectiveCtx = context ?: appContext
+            effectiveCtx?.let { ctx ->
                 val customFile = java.io.File(ctx.filesDir, "core/libsentinel_core.so")
                 if (customFile.exists() && customFile.length() > 0) {
                     candidates.add(customFile.absolutePath)

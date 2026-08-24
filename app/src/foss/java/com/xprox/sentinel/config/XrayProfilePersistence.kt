@@ -6,6 +6,9 @@ import java.util.UUID
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 object XrayProfilePersistence {
     private const val TAG = "XrayProfilePersistence"
@@ -17,6 +20,13 @@ object XrayProfilePersistence {
         tryEmit(Unit)
     }
     val updatesFlow: SharedFlow<Unit> = _updatesFlow.asSharedFlow()
+
+    private val _activeHotspotSessionClient = MutableStateFlow<String?>(null)
+    val activeHotspotSessionClient: StateFlow<String?> = _activeHotspotSessionClient.asStateFlow()
+
+    fun setHotspotActiveSession(clientName: String?) {
+        _activeHotspotSessionClient.value = clientName
+    }
 
     private fun notifyUpdate() {
         _updatesFlow.tryEmit(Unit)
@@ -643,6 +653,86 @@ object XrayProfilePersistence {
 
     fun loadSniffRouteOnly(context: Context): Boolean {
         return getEncryptedPrefs(context).getBoolean(KEY_SNIFF_ROUTE_ONLY, false)
+    }
+
+    // --- Hotspot Paired Devices & Initial Sync Persistence ---
+    private const val KEY_PAIRED_DEVICES = "xprox_hotspot_paired_devices"
+    private const val KEY_INITIAL_PROXY_SYNC_DONE = "xprox_initial_proxy_sync_done"
+
+    fun saveInitialProxySyncDone(context: Context, done: Boolean) {
+        getEncryptedPrefs(context).edit().putBoolean(KEY_INITIAL_PROXY_SYNC_DONE, done).apply()
+    }
+
+    fun isInitialProxySyncDone(context: Context): Boolean {
+        return getEncryptedPrefs(context).getBoolean(KEY_INITIAL_PROXY_SYNC_DONE, false)
+    }
+
+    fun savePairedDevice(context: Context, token: String, masterKeyBase64: String, clientName: String) {
+        val prefs = getEncryptedPrefs(context)
+        val existingJson = prefs.getString(KEY_PAIRED_DEVICES, null)
+        val array = if (!existingJson.isNullOrEmpty()) {
+            try { org.json.JSONArray(existingJson) } catch (e: Exception) { org.json.JSONArray() }
+        } else {
+            org.json.JSONArray()
+        }
+
+        val newArray = org.json.JSONArray()
+        for (i in 0 until array.length()) {
+            val obj = array.optJSONObject(i) ?: continue
+            if (obj.optString("token") != token) {
+                newArray.put(obj)
+            }
+        }
+
+        val newObj = org.json.JSONObject().apply {
+            put("token", token)
+            put("key", masterKeyBase64)
+            put("clientName", clientName)
+            put("pairedAt", System.currentTimeMillis())
+        }
+        newArray.put(newObj)
+        prefs.edit().putString(KEY_PAIRED_DEVICES, newArray.toString()).apply()
+        _updatesFlow.tryEmit(Unit)
+    }
+
+    fun getPairedDeviceKey(context: Context, token: String): ByteArray? {
+        val prefs = getEncryptedPrefs(context)
+        val existingJson = prefs.getString(KEY_PAIRED_DEVICES, null) ?: return null
+        return try {
+            val array = org.json.JSONArray(existingJson)
+            for (i in 0 until array.length()) {
+                val obj = array.optJSONObject(i) ?: continue
+                if (obj.optString("token") == token) {
+                    val keyBase64 = obj.optString("key")
+                    if (keyBase64.isNotEmpty()) {
+                        return android.util.Base64.decode(keyBase64, android.util.Base64.NO_WRAP)
+                    }
+                }
+            }
+            null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading paired device key", e)
+            null
+        }
+    }
+
+    fun removePairedDevice(context: Context, token: String) {
+        val prefs = getEncryptedPrefs(context)
+        val existingJson = prefs.getString(KEY_PAIRED_DEVICES, null) ?: return
+        try {
+            val array = org.json.JSONArray(existingJson)
+            val newArray = org.json.JSONArray()
+            for (i in 0 until array.length()) {
+                val obj = array.optJSONObject(i) ?: continue
+                if (obj.optString("token") != token) {
+                    newArray.put(obj)
+                }
+            }
+            prefs.edit().putString(KEY_PAIRED_DEVICES, newArray.toString()).apply()
+            _updatesFlow.tryEmit(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error removing paired device", e)
+        }
     }
 }
 

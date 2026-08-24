@@ -26,9 +26,11 @@ object LogManager {
     }
     private const val PREFS_NAME = "x_prox_sensitive_ports_prefs"
     private const val KEY_ACTIVE_PORTS = "active_sensitive_ports"
+    private const val KEY_CUSTOM_PORTS = "custom_sensitive_ports"
 
     private val DEFAULT_ACTIVE_PORTS = emptySet<Int>()
     private var activePortsSet: Set<Int> = emptySet()
+    private var customPortsMap: Map<Int, String>? = null
 
     private const val KEY_SHIELD_MODE = "security_shield_mode"
     private const val KEY_BLOCK_THRESHOLD = "security_block_threshold"
