@@ -178,7 +178,7 @@ class SentinelPairingServer(
                     val requestBody = String(bodyChars)
                     val jsonReq = if (requestBody.isNotBlank()) JSONObject(requestBody) else JSONObject()
                     val clientName = jsonReq.optString("clientName", "Windows PC")
-                    val pinCode = jsonReq.optString("pinCode", "0000")
+                    val pinCode = if (jsonReq.has("pinCode")) jsonReq.optString("pinCode", "0000") else jsonReq.optString("pin", "0000")
 
                     // Asynchronously request interactive approval on Android screen
                     val latch = CountDownLatch(1)
