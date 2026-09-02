@@ -186,7 +186,8 @@ data class AndroidAuditRequest(
     @SerialName("tcp_ack") val tcpAck: Long = 0L,
     @SerialName("tcp_window") val tcpWindow: Int = 0,
     @SerialName("audit_ports") val auditPorts: List<Int>? = null,
-    @SerialName("max_threshold") val maxThreshold: Int = 2
+    @SerialName("max_threshold") val maxThreshold: Int = 2,
+    @SerialName("is_explicit_block") val isExplicitBlock: Boolean = false
 )
 
 @Serializable

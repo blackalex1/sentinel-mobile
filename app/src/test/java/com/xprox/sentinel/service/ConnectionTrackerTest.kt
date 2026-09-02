@@ -2,6 +2,8 @@ package com.xprox.sentinel.service
 
 import android.content.Context
 import android.net.ConnectivityManager
+import com.xprox.sentinel.config.XrayProfilePersistence
+import com.xprox.sentinel.core.SentinelCore
 import com.xprox.sentinel.log.LogManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -33,6 +35,7 @@ class ConnectionTrackerTest {
         // Mock SharedPreferences
         val inMemoryPrefs = InMemorySharedPreferences()
         `when`(mockContext.getSharedPreferences(anyString(), anyInt())).thenReturn(inMemoryPrefs)
+        `when`(mockContext.applicationContext).thenReturn(mockContext)
 
         // Mock System Services
         `when`(mockContext.getSystemService(Context.CONNECTIVITY_SERVICE)).thenReturn(mockConnManager)
@@ -45,30 +48,16 @@ class ConnectionTrackerTest {
         // Mock appResolver to resolve standard app info
         `when`(mockAppResolver.resolveApp(anyInt())).thenReturn(Pair("My Resolved App", "com.resolved.pkg"))
 
-        // Reset ThreatDetectionManager maps
-        val connectionAttemptsField = ThreatDetectionManager::class.java.getDeclaredField("connectionAttempts").apply {
-            isAccessible = true
-        }
-        val connectionAttempts = connectionAttemptsField.get(null) as ConcurrentHashMap<*, *>
-        connectionAttempts.clear()
-
-        val blockedAppsField = ThreatDetectionManager::class.java.getDeclaredField("blockedApps").apply {
-            isAccessible = true
-        }
-        val blockedApps = blockedAppsField.get(null) as MutableSet<String>
-        blockedApps.clear()
-
         // Clear existing log file
-        val logFile = File(fakeFilesDir, "x_prox_sensitive_connections.log")
-        if (logFile.exists()) {
-            logFile.delete()
-        }
+        LogManager.clearLogs(mockContext)
 
-        // Mock active audited ports set inside LogManager
-        val activePortsField = LogManager::class.java.getDeclaredField("activePortsSet").apply {
-            isAccessible = true
-        }
-        activePortsField.set(null, setOf(22, 443)) // Only monitor SSH (22) and HTTPS (443)
+        // Reset threats
+        ThreatDetectionManager.clearThreats(mockContext)
+        XrayProfilePersistence.resetCacheForTesting()
+        SentinelCore.clearLogs()
+
+        // Configure active ports
+        LogManager.saveActivePorts(mockContext, setOf(22, 443))
 
         logLoggedCount = 0
     }

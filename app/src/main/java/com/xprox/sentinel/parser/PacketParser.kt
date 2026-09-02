@@ -33,17 +33,26 @@ object PacketParser {
             val slice = if (length == packetBytes.size) packetBytes else packetBytes.copyOfRange(0, length)
             val dissected = SentinelCore.dissectPacket(null, slice)
             if (dissected != null && dissected.sourceIp.isNotEmpty() && dissected.destinationIp.isNotEmpty()) {
-                val protoInt = if (dissected.protocol.equals("UDP", ignoreCase = true)) 17 else 6
+                val isTcp = dissected.protocol.equals("TCP", ignoreCase = true)
+                val isUdp = dissected.protocol.equals("UDP", ignoreCase = true)
+                if (!isTcp && !isUdp) return null
+                if (dissected.destinationPort <= 0) return null
+
+                val protoInt = if (isUdp) 17 else 6
+                val flags = formatTcpFlags(dissected.tcpFlags, isUdp)
+                val srcIp = formatIp(dissected.sourceIp)
+                val dstIp = formatIp(dissected.destinationIp)
+
                 return ParsedPacket(
                     protocol = protoInt,
-                    sourceIp = dissected.sourceIp,
-                    destinationIp = dissected.destinationIp,
+                    sourceIp = srcIp,
+                    destinationIp = dstIp,
                     sourcePort = dissected.sourcePort,
                     destinationPort = dissected.destinationPort,
                     ttl = dissected.ttl,
                     ipLength = dissected.totalLength,
-                    ipFlags = dissected.ipFlags,
-                    tcpFlags = dissected.tcpFlags,
+                    ipFlags = dissected.ipFlags.replace("|", ", "),
+                    tcpFlags = flags,
                     tcpSeq = dissected.tcpSeq,
                     tcpAck = dissected.tcpAck,
                     tcpWindow = dissected.tcpWindow
@@ -54,6 +63,34 @@ object PacketParser {
         }
 
         return fallbackParse(packetBytes, length)
+    }
+
+    private fun formatIp(ip: String): String {
+        return try {
+            val addr = java.net.InetAddress.getByName(ip)
+            if (addr is java.net.Inet6Address) {
+                val bytes = addr.address
+                val sb = StringBuilder(39)
+                for (i in 0 until 8) {
+                    val part = ((bytes[i * 2].toInt() and 0xFF) shl 8) or (bytes[i * 2 + 1].toInt() and 0xFF)
+                    sb.append(part.toString(16))
+                    if (i < 7) sb.append(':')
+                }
+                sb.toString()
+            } else {
+                addr.hostAddress ?: ip
+            }
+        } catch (e: Exception) {
+            ip
+        }
+    }
+
+    private fun formatTcpFlags(flags: String, isUdp: Boolean): String {
+        if (isUdp) return "N/A (UDP)"
+        if (flags.isEmpty() || flags == "None") return "None"
+        val parts = flags.split("|").map { it.trim() }.filter { it.isNotEmpty() }
+        if (parts.isEmpty()) return "None"
+        return parts.sorted().joinToString(", ")
     }
 
     private fun fallbackParse(packetBytes: ByteArray, length: Int): ParsedPacket? {

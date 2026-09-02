@@ -63,7 +63,7 @@ class PacketForensicsTest {
         val packageName = "com.test.app"
         val srcIp = "10.0.0.2"
         val srcPort = 50000
-        val dstIp = "1.2.3.4"
+        val dstIp = "198.51.100.4"
         val dstPort = 80
         val seq = 1000L
         val ack = 2000L

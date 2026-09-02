@@ -48,7 +48,7 @@ class TetheringScannerTest {
         // Public WAN ranges
         assertFalse(invokeIsPrivateIp("8.8.8.8"))
         assertFalse(invokeIsPrivateIp("203.0.113.8"))
-        assertFalse(invokeIsPrivateIp("185.152.12.3"))
+        assertFalse(invokeIsPrivateIp("198.51.100.33"))
     }
 
     @Test

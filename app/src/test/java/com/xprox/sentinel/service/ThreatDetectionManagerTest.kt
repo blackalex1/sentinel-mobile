@@ -5,6 +5,8 @@ import android.content.SharedPreferences
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
+import com.xprox.sentinel.config.XrayProfilePersistence
+import com.xprox.sentinel.core.SentinelCore
 import com.xprox.sentinel.log.LogManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -57,30 +59,16 @@ class ThreatDetectionManagerTest {
         fakeFilesDir.mkdirs()
         `when`(mockContext.filesDir).thenReturn(fakeFilesDir)
 
-        // Mock Active Monitored Ports Set using reflection to bypass SharedPreferences
-        val activePortsField = LogManager::class.java.getDeclaredField("activePortsSet").apply {
-            isAccessible = true
-        }
-        activePortsField.set(null, setOf(22, 443))
+        // Clear existing log file
+        LogManager.clearLogs(mockContext)
 
-        // Reset ThreatDetectionManager maps using reflection
-        val connectionAttemptsField = ThreatDetectionManager::class.java.getDeclaredField("connectionAttempts").apply {
-            isAccessible = true
-        }
-        val connectionAttempts = connectionAttemptsField.get(null) as ConcurrentHashMap<*, *>
-        connectionAttempts.clear()
+        // Reset ThreatDetectionManager and native core threats
+        ThreatDetectionManager.clearThreats(mockContext)
+        XrayProfilePersistence.resetCacheForTesting()
+        SentinelCore.clearLogs()
 
-        val blockedAppsField = ThreatDetectionManager::class.java.getDeclaredField("blockedApps").apply {
-            isAccessible = true
-        }
-        val blockedApps = blockedAppsField.get(null) as MutableSet<String>
-        blockedApps.clear()
-
-        val flaggedSystemAppsField = ThreatDetectionManager::class.java.getDeclaredField("flaggedSystemApps").apply {
-            isAccessible = true
-        }
-        val flaggedSystemApps = flaggedSystemAppsField.get(null) as MutableSet<String>
-        flaggedSystemApps.clear()
+        // Configure Active Monitored Ports Set
+        LogManager.saveActivePorts(mockContext, setOf(22, 443))
     }
 
     @Test

@@ -96,12 +96,12 @@ class SentinelSecurityTest {
         
         // Add malicious domains/IPs to the blackhole list
         blockedDestinations.clear()
-        blockedDestinations.add("phishing-malware-botnet.cn")
+        blockedDestinations.add("phishing-malware-botnet.test")
         blockedDestinations.add("198.51.100.42")
 
         // Retrieve threat targets and verify reflection injection
         val blockedDests = ThreatDetectionManager.getBlockedDestinations()
-        assertTrue(blockedDests.contains("phishing-malware-botnet.cn"))
+        assertTrue(blockedDests.contains("phishing-malware-botnet.test"))
         assertTrue(blockedDests.contains("198.51.100.42"))
 
         // 2. Compile mock routing firewall rules using these active threat targets
@@ -126,7 +126,7 @@ class SentinelSecurityTest {
             blockedRuleJson.contains("\"ip\":") && blockedRuleJson.contains("198.51.100.42"))
         
         assertTrue("Dynamic firewall must block domain names of identified threats!", 
-            blockedRuleJson.contains("\"domain\":") && blockedRuleJson.contains("phishing-malware-botnet.cn"))
+            blockedRuleJson.contains("\"domain\":") && blockedRuleJson.contains("phishing-malware-botnet.test"))
         
         assertTrue("All dynamic threat firewall rules must route to the blackhole 'block' outbound!", 
             blockedRuleJson.contains("\"outboundTag\": \"block\""))

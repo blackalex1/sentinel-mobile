@@ -32,3 +32,5 @@ subscription.txt
 secrets/
 billing_key.json
 google-services.json
+app/data/
+*.pcap

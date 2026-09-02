@@ -4,6 +4,8 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.content.pm.PackageManager
 import android.content.pm.ApplicationInfo
+import com.xprox.sentinel.config.XrayProfilePersistence
+import com.xprox.sentinel.core.SentinelCore
 import com.xprox.sentinel.log.LogManager
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -36,6 +38,7 @@ class ConnectionAuditParserTest {
         // Mock SharedPreferences
         val inMemoryPrefs = InMemorySharedPreferences()
         `when`(mockContext.getSharedPreferences(anyString(), anyInt())).thenReturn(inMemoryPrefs)
+        `when`(mockContext.applicationContext).thenReturn(mockContext)
 
         // Mock Context services
         `when`(mockContext.getSystemService(Context.CONNECTIVITY_SERVICE)).thenReturn(mockConnManager)
@@ -54,30 +57,16 @@ class ConnectionAuditParserTest {
         `when`(mockPm.getApplicationInfo(anyString(), anyInt())).thenReturn(appInfo)
         `when`(mockPm.getApplicationLabel(appInfo)).thenReturn("Resolved Test App")
 
-        // Reset ThreatDetectionManager maps
-        val connectionAttemptsField = ThreatDetectionManager::class.java.getDeclaredField("connectionAttempts").apply {
-            isAccessible = true
-        }
-        val connectionAttempts = connectionAttemptsField.get(null) as ConcurrentHashMap<*, *>
-        connectionAttempts.clear()
-
-        val blockedAppsField = ThreatDetectionManager::class.java.getDeclaredField("blockedApps").apply {
-            isAccessible = true
-        }
-        val blockedApps = blockedAppsField.get(null) as MutableSet<String>
-        blockedApps.clear()
-
         // Clear existing log file if any
-        val logFile = File(fakeFilesDir, "x_prox_sensitive_connections.log")
-        if (logFile.exists()) {
-            logFile.delete()
-        }
+        LogManager.clearLogs(mockContext)
 
-        // Mock active ports
-        val activePortsField = LogManager::class.java.getDeclaredField("activePortsSet").apply {
-            isAccessible = true
-        }
-        activePortsField.set(null, setOf(22, 443, 80))
+        // Reset threats & persistence cache
+        ThreatDetectionManager.clearThreats(mockContext)
+        XrayProfilePersistence.resetCacheForTesting()
+        SentinelCore.clearLogs()
+
+        // Configure active ports
+        LogManager.saveActivePorts(mockContext, setOf(22, 443, 80))
 
         logEntries.clear()
     }

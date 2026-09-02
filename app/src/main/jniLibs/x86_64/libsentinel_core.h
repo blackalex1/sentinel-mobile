@@ -21,7 +21,61 @@ extern const char *_GoStringPtr(_GoString_ s);
 /* Start of preamble from import "C" comments.  */
 
 
+#line 3 "android_exports.go"
+
+#include <stdlib.h>
+
+#line 1 "cgo-generated-wrapper"
+
+#line 3 "config_exports.go"
+
+#include <stdlib.h>
+
+#line 1 "cgo-generated-wrapper"
+
+#line 3 "crypto_exports.go"
+
+#include <stdlib.h>
+
+#line 1 "cgo-generated-wrapper"
+
+#line 3 "diagnostics_exports.go"
+
+#include <stdlib.h>
+
+#line 1 "cgo-generated-wrapper"
+
 #line 3 "main.go"
+
+#include <stdlib.h>
+
+#line 1 "cgo-generated-wrapper"
+
+#line 3 "routing_exports.go"
+
+#include <stdlib.h>
+
+#line 1 "cgo-generated-wrapper"
+
+#line 3 "security_exports.go"
+
+#include <stdlib.h>
+
+#line 1 "cgo-generated-wrapper"
+
+#line 3 "sessions_exports.go"
+
+#include <stdlib.h>
+
+#line 1 "cgo-generated-wrapper"
+
+#line 3 "supervisor_exports.go"
+
+#include <stdlib.h>
+
+#line 1 "cgo-generated-wrapper"
+
+#line 3 "traffic_exports.go"
 
 #include <stdlib.h>
 
@@ -87,40 +141,6 @@ typedef struct { void *data; GoInt len; GoInt cap; } GoSlice;
 extern "C" {
 #endif
 
-extern char* SentinelGetEngineVersion(void);
-extern char* SentinelBuildConfig(char* specJSON);
-extern char* SentinelBuildServerConfig(char* specJSON);
-extern char* SentinelParseURI(char* rawURI);
-extern char* SentinelGenerateURI(char* profileJSON);
-extern char* SentinelGenerateX25519Keys(void);
-extern char* SentinelGenerateVlessEncKeys(void);
-extern char* SentinelGetCoresStatus(void);
-extern char* SentinelRegisterHysteriaPort(int port);
-extern char* SentinelConfigureSupervisor(char* configJSON);
-extern char* SentinelGetUnifiedTraffic(void);
-extern char* SentinelKickClient(char* clientEmail);
-extern char* SentinelGetCoreLogs(char* logPath, int maxLines);
-extern char* SentinelPing(char* host, int port, int timeoutMs);
-extern char* SentinelEncrypt(char* data, char* secret);
-extern char* SentinelDecrypt(char* payload, char* secret);
-extern char* SentinelListPresets(void);
-extern char* SentinelGetPreset(char* presetID);
-extern char* SentinelGetConfigurationSchema(char* lang);
-extern char* SentinelEncryptPayload(char* plaintext, char* secret);
-extern char* SentinelDecryptPayload(char* ciphertext, char* secret);
-extern char* SentinelRunHealthCheck(int socksPort, int httpPort, char* secret);
-extern char* SentinelStartCore(char* core, char* bin, char* config);
-extern char* SentinelStopCore(char* core);
-extern char* SentinelRestartCore(char* core, char* bin, char* config);
-extern char* SentinelValidateCore(char* core, char* bin, char* config);
-extern char* SentinelGetCoreVersion(char* core, char* bin);
-extern char* SentinelPopLogLine(char* core, int timeoutMs);
-extern char* SentinelGetInMemoryLogs(char* core, int limit);
-extern char* SentinelClearInMemoryLogs(char* core);
-extern char* SentinelGetSecuritySchema(char* lang);
-extern char* SentinelGetDefaultSecurityConfig(void);
-extern char* SentinelValidateSecurityConfig(char* configJSON);
-extern char* SentinelAndroidAuditConnection(char* reqJSON);
 extern char* SentinelAndroidWritePcap(char* filePath, char* rawHex, long long int timestampMs);
 extern char* SentinelAndroidSynthesizeAndWritePcap(char* filePath, char* proto, char* srcIP, int srcPort, char* dstIP, int dstPort, int tcpFlags, unsigned int seq, unsigned int ack, int window, char* payloadHex, long long int timestampMs);
 extern char* SentinelAndroidDissectPacket(char* rawHex);
@@ -129,15 +149,84 @@ extern char* SentinelAndroidUnblockApp(char* pkgName);
 extern char* SentinelAndroidIsAppBlocked(char* pkgName);
 extern char* SentinelAndroidGetBlockedApps(void);
 extern char* SentinelAndroidClearThreats(void);
-extern char* SentinelBatchPing(char* targetsJSON, int timeoutMs);
-extern char* SentinelProxyPing(int socksPort, char* authUser, char* authPass, char* targetURL, int timeoutMs);
-extern char* SentinelGetPublicIP(int socksPort, char* authUser, char* authPass, int timeoutMs);
-extern char* SentinelOptimizeRules(char* rulesJSON);
 extern char* SentinelAndroidPushLog(char* logJSON);
 extern char* SentinelAndroidGetLogs(int limit, int offset, int portFilter, char* query);
 extern char* SentinelAndroidGetLogStats(void);
 extern char* SentinelAndroidClearLogs(void);
+extern char* SentinelSetLanguage(char* lang);
+extern char* SentinelBuildConfig(char* specJSON);
+extern char* SentinelBuildServerConfig(char* specJSON);
+extern char* SentinelParseURI(char* rawURI);
+extern char* SentinelParseSubscription(char* subscriptionContent);
+extern char* SentinelBatchCheckProxies(char* proxiesJSON, char* targetHost, int targetPort, int useTLS, int timeoutMs, int concurrency);
+extern char* SentinelFindFastestProxy(char* proxiesJSON, char* targetHost, int targetPort, int useTLS, int timeoutMs, int concurrency);
+extern char* SentinelBuildFailoverClientConfig(char* profilesJSON, char* targetCoreStr, int socksPort, int httpPort, char* healthCheckURL);
+extern char* SentinelGenerateURI(char* profileJSON);
+extern char* SentinelGenerateX25519Keys(void);
+extern char* SentinelGenerateVlessEncKeys(void);
+extern char* SentinelEncrypt(char* data, char* secret);
+extern char* SentinelDecrypt(char* payload, char* secret);
+extern char* SentinelEncryptPayload(char* plaintext, char* secret);
+extern char* SentinelDecryptPayload(char* ciphertext, char* secret);
+extern char* SentinelPing(char* host, int port, int timeoutMs);
+extern char* SentinelRunHealthCheck(int socksPort, int httpPort, char* secret);
+extern char* SentinelBatchPing(char* targetsJSON, int timeoutMs);
+extern char* SentinelProxyPing(int socksPort, char* authUser, char* authPass, char* targetURL, int timeoutMs);
+extern char* SentinelGetPublicIP(int socksPort, char* authUser, char* authPass, int timeoutMs);
+extern char* SentinelGetEngineVersion(void);
 extern void SentinelFreeString(char* str);
+extern char* SentinelListPresets(void);
+extern char* SentinelGetPreset(char* presetID);
+extern char* SentinelGetConfigurationSchema(char* lang);
+extern char* SentinelOptimizeRules(char* rulesJSON);
+extern char* SentinelGetSecuritySchema(char* lang);
+extern char* SentinelGetDefaultSecurityConfig(void);
+extern char* SentinelValidateSecurityConfig(char* configJSON);
+extern char* SentinelAuditConnection(char* reqJSON);
+extern char* SentinelGetPortShieldCatalog(char* lang);
+extern char* SentinelConfigureSecurityPolicy(char* policyJSON);
+extern char* SentinelGetSecurityPolicy(void);
+extern char* SentinelIngestCoreLog(char* logLine);
+extern char* SentinelGetBlockedApps(void);
+extern char* SentinelUnblockApp(char* callerID);
+extern char* SentinelUnblockAllApps(void);
+extern char* SentinelGetPcapStatus(void);
+extern char* SentinelStopPcapCapture(void);
+extern char* SentinelParseIptablesLine(char* line, int vpnVMID);
+extern char* SentinelClassifyConnection(char* eventJSON, char* policyJSON, char* lang);
+extern char* SentinelFindRealVPNClientIP(char* proto, char* containerIP, char* dstIP, int sport, int dpt, char* conntrackDump);
+extern char* SentinelFindXrayClientEmail(char* linesJSON, char* clientIP, char* dstIP, int dstPort, int maxAgeSec);
+extern char* SentinelFindHysteriaClientEmail(char* linesJSON, char* dstIP, int dstPort, int maxAgeSec);
+extern char* SentinelFindClientIPForEmail(char* linesJSON, char* email, int maxAgeSec);
+extern char* SentinelParseAuthLogLine(char* line);
+extern char* SentinelParseRouterConntrackLine(char* line);
+extern char* SentinelParseRouterIptablesLine(char* line);
+extern char* SentinelStartSecurityPipeline(char* configJSON);
+extern char* SentinelPollSecurityEvent(int timeoutMs);
+extern char* SentinelStopSecurityPipeline(void);
+extern char* SentinelProcessTrafficLine(char* source, char* line);
+extern char* SentinelConfigureRouterThreatDetector(char* configJSON);
+extern char* SentinelGetActiveSessions(void);
+extern char* SentinelGetOnlineEmails(void);
+extern char* SentinelGetRecentSessionEvents(long long int sinceTimestamp, int limit);
+extern char* SentinelRegisterExternalConnect(char* core, char* email, char* ip);
+extern char* SentinelGetCoresStatus(void);
+extern char* SentinelRegisterHysteriaPort(int port);
+extern char* SentinelConfigureSupervisor(char* configJSON);
+extern char* SentinelGetCoreLogs(char* logPath, int maxLines);
+extern char* SentinelStartCore(char* core, char* bin, char* config);
+extern char* SentinelStopCore(char* core);
+extern char* SentinelRestartCore(char* core, char* bin, char* config);
+extern char* SentinelValidateCore(char* core, char* bin, char* config);
+extern char* SentinelGetCoreVersion(char* core, char* bin);
+extern char* SentinelPopLogLine(char* core, int timeoutMs);
+extern char* SentinelGetInMemoryLogs(char* core, int limit);
+extern char* SentinelClearInMemoryLogs(char* core);
+extern char* SentinelPushLogLine(char* core, char* line);
+extern char* SentinelGetUnifiedTraffic(void);
+extern char* SentinelGetRealtimeTraffic(char* clashAddr);
+extern char* SentinelResetRealtimeTraffic(void);
+extern char* SentinelKickClient(char* clientEmail);
 
 #ifdef __cplusplus
 }

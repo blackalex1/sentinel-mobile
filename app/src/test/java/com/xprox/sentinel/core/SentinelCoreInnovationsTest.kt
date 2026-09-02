@@ -79,14 +79,14 @@ class SentinelCoreInnovationsTest {
 
     @Test
     fun testNativeConnectionLogParser() {
-        val tunLogLine = "from tcp:10.0.0.2:54321 accepted tcp:91.219.148.131:443"
+        val tunLogLine = "from tcp:10.0.0.2:54321 accepted tcp:198.51.100.131:443"
         val parsed = SentinelCore.parseConnectionLog(tunLogLine)
         
         assertNotNull("SentinelCore.parseConnectionLog must successfully parse valid Xray log line", parsed)
         assertEquals("TCP", parsed!!.protocol)
         assertEquals("10.0.0.2", parsed.srcIp)
         assertEquals(54321, parsed.srcPort)
-        assertEquals("91.219.148.131", parsed.destIp)
+        assertEquals("198.51.100.131", parsed.destIp)
         assertEquals(443, parsed.destPort)
 
         // Test non-accepted log skipping
@@ -114,7 +114,7 @@ class SentinelCoreInnovationsTest {
         val entry1 = com.xprox.sentinel.core.models.AndroidLogEntry(
             packageName = "org.telegram.messenger",
             appName = "Telegram",
-            destinationIp = "149.154.167.50",
+            destinationIp = "198.51.100.50",
             destinationPort = 443,
             protocol = "TCP",
             serviceName = "HTTPS",
@@ -123,7 +123,7 @@ class SentinelCoreInnovationsTest {
         val entry2 = com.xprox.sentinel.core.models.AndroidLogEntry(
             packageName = "com.google.android.youtube",
             appName = "YouTube",
-            destinationIp = "172.217.16.206",
+            destinationIp = "198.51.100.206",
             destinationPort = 80,
             protocol = "TCP",
             serviceName = "HTTP",

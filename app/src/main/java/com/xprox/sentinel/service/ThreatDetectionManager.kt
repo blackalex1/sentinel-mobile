@@ -188,6 +188,13 @@ object ThreatDetectionManager {
         // Active audit ports from user preferences (if empty, audits all non-web ports)
         val activePorts = LogManager.loadActivePorts(context).toList()
 
+        val customBlockedRules = try {
+            XrayProfilePersistence.loadCustomBlockRules(context)
+        } catch (e: Exception) {
+            emptyList<String>()
+        }
+        val isExplicitBlock = (destinationIp.isNotEmpty() && (blockedDestinations.contains(destinationIp) || customBlockedRules.contains(destinationIp)))
+
         val req = AndroidAuditRequest(
             packageName = packageName,
             appName = appName,
@@ -202,7 +209,8 @@ object ThreatDetectionManager {
             tcpAck = tcpAck,
             tcpWindow = tcpWindow,
             auditPorts = if (activePorts.isNotEmpty()) activePorts else null,
-            maxThreshold = THRESHOLD
+            maxThreshold = THRESHOLD,
+            isExplicitBlock = isExplicitBlock
         )
 
         val record = ConnectionRecord(
@@ -228,8 +236,8 @@ object ThreatDetectionManager {
         // Native Sentinel-Core audit call
         val verdict = SentinelCore.auditConnection(context, req)
 
-        // 1. If actively blackholed, log blocked traffic and drop
-        if (verdict.isBlocked && !verdict.shouldBlock) {
+        // 1. If actively blackholed or destination is blocked, log blocked traffic and drop
+        if ((verdict.isBlocked || isExplicitBlock) && !verdict.shouldBlock) {
             val isStandardDnsOrWeb = port == 53 || port == 80 || port == 443 || port == 853 ||
                 destinationIp == "8.8.8.8" || destinationIp == "8.8.4.4" ||
                 destinationIp == "1.1.1.1" || destinationIp == "1.0.0.1" ||
@@ -408,6 +416,26 @@ object ThreatDetectionManager {
         }
 
         return false
+    }
+
+    /**
+     * Resets all in-memory threat states, blackholes, and native Sentinel-Core engine state.
+     */
+    fun clearThreats(context: Context? = null) {
+        blockedApps.clear()
+        flaggedSystemApps.clear()
+        blockedDestinations.clear()
+        blockedPorts.clear()
+        triggerTimes.clear()
+        lastLogTimes.clear()
+        connectionAttempts.clear()
+        _blockedAppsFlow.value = emptyList()
+        _flaggedSystemAppsFlow.value = emptyList()
+        if (context != null) {
+            XrayProfilePersistence.saveBlockedApps(context, emptySet())
+            XrayProfilePersistence.saveFlaggedSystemApps(context, emptySet())
+        }
+        SentinelCore.clearThreats()
     }
 
     /**

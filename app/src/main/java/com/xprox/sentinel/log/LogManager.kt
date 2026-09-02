@@ -189,6 +189,7 @@ object LogManager {
         activePortsSet = ports
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().putStringSet(KEY_ACTIVE_PORTS, ports.map { it.toString() }.toSet()).apply()
+        syncPolicyWithNativeCore(context)
     }
 
     data class LogEntry(
@@ -290,12 +291,13 @@ object LogManager {
     }
 
     private fun writeLogToFile(context: Context, entry: LogEntry) {
+        val appContext = try { context.applicationContext ?: context } catch (e: Throwable) { context }
         val isUnitTest = try {
             !(System.getProperty("java.vm.name") ?: "").contains("Dalvik", ignoreCase = true)
         } catch (e: Exception) {
             false
         }
-        val appContext = context.applicationContext ?: context
+
         if (isUnitTest) {
             writeLogToFileInternal(appContext, entry)
         } else {
