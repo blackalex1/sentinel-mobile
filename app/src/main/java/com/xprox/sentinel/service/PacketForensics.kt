@@ -37,48 +37,6 @@ object PacketForensics {
         return File(directory, "report_${packageName}.pcap")
     }
 
-    /**
-     * Helper to synthesize a valid IPv4 TCP/UDP raw packet byte array on-the-fly.
-     */
-    fun synthesizePacket(
-        protocol: String,
-        destinationIp: String,
-        port: Int
-    ): ByteArray {
-        val isTcp = protocol.equals("TCP", ignoreCase = true)
-        val ipProto = if (isTcp) 6 else 17
-        val destBytes = try {
-            java.net.InetAddress.getByName(destinationIp).address
-        } catch (e: Exception) {
-            byteArrayOf(8, 8, 8, 8)
-        }
-        val safeDest = if (destBytes.size == 4) destBytes else byteArrayOf(8, 8, 8, 8)
-        val srcBytes = byteArrayOf(10, 0, 0, 2)
-        val totalLen = 40
-        val packet = ByteArray(totalLen)
-        packet[0] = 0x45.toByte()
-        packet[1] = 0x00.toByte()
-        packet[2] = ((totalLen shr 8) and 0xFF).toByte()
-        packet[3] = (totalLen and 0xFF).toByte()
-        packet[4] = 0x12.toByte()
-        packet[5] = 0x34.toByte()
-        packet[6] = 0x40.toByte()
-        packet[8] = 64.toByte()
-        packet[9] = ipProto.toByte()
-        System.arraycopy(srcBytes, 0, packet, 12, 4)
-        System.arraycopy(safeDest, 0, packet, 16, 4)
-        if (isTcp) {
-            packet[20] = (0xC0).toByte()
-            packet[21] = (0x00).toByte()
-            packet[22] = ((port shr 8) and 0xFF).toByte()
-            packet[23] = (port and 0xFF).toByte()
-            packet[32] = 0x50.toByte()
-            packet[33] = 0x02.toByte()
-            packet[34] = 0xFA.toByte()
-            packet[35] = 0xF0.toByte()
-        }
-        return packet
-    }
 
     /**
      * Synthesizes and writes a TCP payload flow packet directly into the PCAP dump using Sentinel-Core native engine.

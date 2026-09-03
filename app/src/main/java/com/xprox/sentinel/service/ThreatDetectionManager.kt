@@ -119,9 +119,6 @@ object ThreatDetectionManager {
             XrayProfilePersistence.saveBlockedApps(context, blockedApps)
             _blockedAppsFlow.value = blockedApps.toList()
             Log.w(TAG, "Application manually blocked: $packageName")
-
-            // Trigger VPN/Xray configuration update
-            triggerVpnRebuild(context)
         }
     }
 
@@ -142,9 +139,6 @@ object ThreatDetectionManager {
 
             // Delete dynamic threat forensic files to keep disk clean
             ThreatForensics.deleteThreatReport(context, packageName)
-
-            // Trigger VPN/Xray configuration update
-            triggerVpnRebuild(context)
         }
     }
 
@@ -409,9 +403,6 @@ object ThreatDetectionManager {
             }
 
             ThreatNotificationHelper.showSecurityAlertNotification(context, appName, packageName)
-
-            // Rebuild VPN routing to enforce blackhole immediately
-            triggerVpnRebuild(context)
             return true
         }
 
@@ -457,23 +448,5 @@ object ThreatDetectionManager {
      */
     fun getPcapReportFile(context: Context, packageName: String): File? {
         return ThreatForensics.getPcapReportFile(context, packageName)
-    }
-
-    /**
-     * Restarts/reloads the VPN configuration dynamically.
-     */
-    private fun triggerVpnRebuild(context: Context) {
-        try {
-            val isVpnActive = VpnManagerService.isRunningFlow.value
-            if (isVpnActive) {
-                Log.i(TAG, "Rebuilding VPN and Xray configuration to apply new blackhole changes dynamically")
-                val intent = Intent(context, VpnManagerService::class.java).apply {
-                    action = VpnManagerService.ACTION_RELOAD_CONFIG
-                }
-                context.startService(intent)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to rebuild VPN interface dynamically", e)
-        }
     }
 }

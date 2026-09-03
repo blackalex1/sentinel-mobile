@@ -26,37 +26,6 @@ class PacketForensicsTest {
         `when`(mockContext.filesDir).thenReturn(testDir)
     }
 
-    @Test
-    fun testSynthesizePacket() {
-        val protocol = "TCP"
-        val destIp = "8.8.8.8"
-        val port = 80
-        val packet = PacketForensics.synthesizePacket(protocol, destIp, port)
-
-        // Standard IP header + TCP header is 40 bytes
-        assertEquals(40, packet.size)
-
-        // Version 4, IHL 5
-        assertEquals(0x45.toByte(), packet[0])
-
-        // Protocol (TCP = 6)
-        assertEquals(6.toByte(), packet[9])
-
-        // Destination IP matches
-        assertEquals(8.toByte(), packet[16])
-        assertEquals(8.toByte(), packet[17])
-        assertEquals(8.toByte(), packet[18])
-        assertEquals(8.toByte(), packet[19])
-
-        // Destination Port matches
-        val destPortHigh = packet[22].toInt() and 0xFF
-        val destPortLow = packet[23].toInt() and 0xFF
-        val actualPort = (destPortHigh shl 8) or destPortLow
-        assertEquals(port, actualPort)
-
-        // TCP Flags SYN (0x02)
-        assertEquals(0x02.toByte(), packet[33])
-    }
 
     @Test
     fun testWriteTcpPayloadToPcap() {

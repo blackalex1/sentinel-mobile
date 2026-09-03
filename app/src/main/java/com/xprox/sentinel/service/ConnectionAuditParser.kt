@@ -21,8 +21,7 @@ object ConnectionAuditParser {
     fun parseAndLog(context: Context, line: String) {
         try {
             val parsed = SentinelCore.parseConnectionLog(line) ?: return
-            val protocol = if (parsed.protocol.equals("UDP", ignoreCase = true)) 17 else 6
-            resolveAndLogConnection(context, protocol, parsed.srcIp, parsed.srcPort, parsed.destIp, parsed.destPort)
+            resolveAndLogConnection(context, parsed)
         } catch (e: Exception) {
             Log.e(TAG, "Error parsing Xray connection log: $line", e)
         }
@@ -30,40 +29,32 @@ object ConnectionAuditParser {
 
     private fun resolveAndLogConnection(
         context: Context,
-        protocol: Int,
-        srcIp: String,
-        srcPort: Int,
-        destIp: String,
-        destPort: Int
+        parsed: com.xprox.sentinel.core.models.ParsedConnectionLog
     ) {
+        val protocol = if (parsed.protocol.equals("UDP", ignoreCase = true)) 17 else 6
         val connManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         
         var ownerUid = -1
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
-                val localAddr = InetAddress.getByName(srcIp)
-                val remoteAddr = InetAddress.getByName(destIp)
+                val localAddr = InetAddress.getByName(parsed.srcIp)
+                val remoteAddr = InetAddress.getByName(parsed.destIp)
                 
                 ownerUid = connManager.getConnectionOwnerUid(
                     protocol,
-                    InetSocketAddress(localAddr, srcPort),
-                    InetSocketAddress(remoteAddr, destPort)
+                    InetSocketAddress(localAddr, parsed.srcPort),
+                    InetSocketAddress(remoteAddr, parsed.destPort)
                 )
             } catch (e: Exception) {
                 // Ignore name resolution failure
             }
         }
 
-        val isHotspot = !srcIp.startsWith("127.") && 
-                        !srcIp.startsWith("10.0.0.") && 
-                        srcIp != "::1" && 
-                        srcIp != "localhost"
-
         val appName: String
         val packageName: String
 
-        if (isHotspot) {
-            appName = "Hotspot Client ($srcIp)"
+        if (parsed.isHotspot) {
+            appName = "Hotspot Client (${parsed.srcIp})"
             packageName = "hotspot.client"
         } else {
             val appResolver = AppResolver(context)
@@ -77,8 +68,8 @@ object ConnectionAuditParser {
             context = context,
             packageName = packageName,
             appName = appName,
-            destinationIp = destIp,
-            port = destPort,
+            destinationIp = parsed.destIp,
+            port = parsed.destPort,
             protocol = if (protocol == 17) "UDP" else "TCP"
         )
     }

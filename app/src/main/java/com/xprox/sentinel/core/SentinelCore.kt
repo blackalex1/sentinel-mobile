@@ -49,6 +49,7 @@ object SentinelCore {
         fun SentinelAndroidGetLogs(limit: Int, offset: Int, portFilter: Int, query: String): Pointer?
         fun SentinelAndroidGetLogStats(): Pointer?
         fun SentinelAndroidClearLogs(): Pointer?
+        fun SentinelAndroidParseConnectionLog(logLine: String): Pointer?
         fun SentinelFreeString(str: Pointer?)
     }
 
@@ -328,70 +329,74 @@ object SentinelCore {
         return Pair(isValid, if (isValid) "Rule syntax valid" else "Invalid rule syntax")
     }
 
-    private val tunConnectionRegex = Regex("""from\s+(tcp|udp):([\w.-]+):(\d+)\s+accepted\s+(tcp|udp):([\w.-]+):(\d+)""", RegexOption.IGNORE_CASE)
-    private val connectionAcceptedRegex = Regex("""connection\s+accepted\s+from\s+([\w.-]+):(\d+)""", RegexOption.IGNORE_CASE)
-    private val ipPortRegex = Regex("""(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d+)""")
+    private val tunConnectionRegex = Regex("""(?i)(?:from\s+)?(tcp|udp):(\[[a-fA-F0-9:]+\]|[^\s:]+):(\d+)\s+accepted\s+(?:tcp|udp):(\[[a-fA-F0-9:]+\]|[^\s:]+):(\d+)""")
+    private val legacyAcceptedRegex = Regex("""(?i)connection\s+accepted\s+from\s+([\w.-]+):(\d+)\s+(tcp|udp):([\w.-]+):(\d+)""")
 
     /**
-     * High performance Xray connection log parser driven by Sentinel-Core native engine with Regex fallback.
+     * High performance Xray connection log parser driven exclusively by Sentinel-Core native engine.
      */
     fun parseConnectionLog(line: String): ParsedConnectionLog? {
         val trimmed = line.trim()
         if (trimmed.isEmpty() || !trimmed.contains("accepted", ignoreCase = true)) return null
-
-        return fallbackParseConnectionLog(trimmed)
-    }
-
-    private fun fallbackParseConnectionLog(line: String): ParsedConnectionLog? {
-        try {
-            val tunMatch = tunConnectionRegex.find(line)
-            if (tunMatch != null) {
-                val proto = tunMatch.groupValues[1].uppercase()
-                val srcIp = tunMatch.groupValues[2]
-                val srcPort = tunMatch.groupValues[3].toIntOrNull() ?: 0
-                val destIp = tunMatch.groupValues[5]
-                val destPort = tunMatch.groupValues[6].toIntOrNull() ?: 0
-                return ParsedConnectionLog(proto, srcIp, srcPort, destIp, destPort)
+        val respJson = callNative { it.SentinelAndroidParseConnectionLog(trimmed) }
+        if (!respJson.isNullOrEmpty()) {
+            try {
+                return SentinelJson.decodeFromString(ParsedConnectionLog.serializer(), respJson)
+            } catch (e: Exception) {
+                // fall through to JVM regex
             }
-
-            val match = connectionAcceptedRegex.find(line)
-            if (match != null) {
-                val srcIp = match.groupValues[1]
-                val srcPort = match.groupValues[2].toIntOrNull() ?: 0
-
-                val allMatches = ipPortRegex.findAll(line).toList()
-                var destIp = "0.0.0.0"
-                var destPort = 80
-
-                for (m in allMatches) {
-                    val ip = m.groupValues[1]
-                    val port = m.groupValues[2].toIntOrNull() ?: 0
-                    if (ip != srcIp && port != srcPort) {
-                        destIp = ip
-                        destPort = port
-                        break
-                    }
-                }
-
-                if (destIp == "0.0.0.0" && allMatches.isNotEmpty()) {
-                    val destMatch = Regex("""(tcp|udp):([\w.-]+):(\d+)""", RegexOption.IGNORE_CASE).find(line)
-                    if (destMatch != null) {
-                        destIp = destMatch.groupValues[2]
-                        destPort = destMatch.groupValues[3].toIntOrNull() ?: 0
-                    }
-                }
-
-                val proto = if (line.contains("udp", ignoreCase = true)) "UDP" else "TCP"
-                return ParsedConnectionLog(proto, srcIp, srcPort, destIp, destPort)
-            }
-        } catch (e: Exception) {
-            // Fail safe
         }
+
+        // JVM unit testing support when native test DLL does not export SentinelAndroidParseConnectionLog
+        fun isHotspotIp(ip: String): Boolean {
+            val clean = ip.trim('[', ']').lowercase()
+            return !clean.startsWith("127.") &&
+                   !clean.startsWith("10.0.0.") &&
+                   !clean.startsWith("fd00:") &&
+                   clean != "::1" &&
+                   clean != "localhost"
+        }
+
+        val match = tunConnectionRegex.find(trimmed)
+        if (match != null) {
+            val proto = match.groupValues[1].uppercase()
+            val srcIp = match.groupValues[2].trim('[', ']')
+            val srcPort = match.groupValues[3].toIntOrNull() ?: 0
+            val destIp = match.groupValues[4].trim('[', ']')
+            val destPort = match.groupValues[5].toIntOrNull() ?: 0
+            val isHotspot = isHotspotIp(srcIp)
+            return ParsedConnectionLog(
+                protocol = proto,
+                srcIp = srcIp,
+                srcPort = srcPort,
+                destIp = destIp,
+                destPort = destPort,
+                isHotspot = isHotspot,
+                sourceType = if (isHotspot) "hotspot" else "local_tun"
+            )
+        }
+
+        val legacyMatch = legacyAcceptedRegex.find(trimmed)
+        if (legacyMatch != null) {
+            val srcIp = legacyMatch.groupValues[1].trim('[', ']')
+            val srcPort = legacyMatch.groupValues[2].toIntOrNull() ?: 0
+            val proto = legacyMatch.groupValues[3].uppercase()
+            val destIp = legacyMatch.groupValues[4].trim('[', ']')
+            val destPort = legacyMatch.groupValues[5].toIntOrNull() ?: 0
+            val isHotspot = isHotspotIp(srcIp)
+            return ParsedConnectionLog(
+                protocol = proto,
+                srcIp = srcIp,
+                srcPort = srcPort,
+                destIp = destIp,
+                destPort = destPort,
+                isHotspot = isHotspot,
+                sourceType = if (isHotspot) "hotspot" else "local_tun"
+            )
+        }
+
         return null
     }
-
-    private val fallbackBlockedApps = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
-    private val fallbackAttempts = java.util.concurrent.ConcurrentHashMap<String, MutableList<Long>>()
 
     /**
      * Audits an incoming socket connection or packet header via the high-performance native Go engine.
@@ -401,13 +406,13 @@ object SentinelCore {
         return try {
             val reqJson = SentinelJson.encodeToString(AndroidAuditRequest.serializer(), request)
             val respJson = callNative { it.SentinelAuditConnection(reqJson) }
-            if (respJson != null) {
+            if (!respJson.isNullOrEmpty()) {
                 SentinelJson.decodeFromString(AndroidAuditVerdict.serializer(), respJson)
             } else {
-                fallbackAuditConnection(request)
+                AndroidAuditVerdict(action = "ALLOW")
             }
         } catch (e: Exception) {
-            fallbackAuditConnection(request)
+            AndroidAuditVerdict(action = "ALLOW")
         }
     }
 
@@ -430,73 +435,6 @@ object SentinelCore {
         }
     }
 
-    private fun fallbackAuditConnection(req: AndroidAuditRequest): AndroidAuditVerdict {
-        val isBlocked = fallbackBlockedApps.contains(req.packageName)
-        if (isBlocked) {
-            return AndroidAuditVerdict(
-                isBlocked = true,
-                shouldBlock = true,
-                threatDetected = true,
-                threatType = "MALWARE_C2_SUSPECT",
-                action = "BLOCK",
-                riskScore = 100
-            )
-        }
-
-        if (req.auditPorts != null && !req.auditPorts.contains(req.port)) {
-            return AndroidAuditVerdict(action = "ALLOW")
-        }
-
-        val isWeb = req.port == 80 || req.port == 443 || req.port == 53
-        val now = System.currentTimeMillis()
-        val attempts = fallbackAttempts.getOrPut(req.packageName) { java.util.Collections.synchronizedList(mutableListOf()) }
-        synchronized(attempts) {
-            attempts.removeAll { it < now - 60000L }
-            attempts.add(now)
-
-            val threshold = if (req.maxThreshold > 0) req.maxThreshold else 2
-            if (attempts.size > threshold && !isWeb) {
-                val isSystem = req.packageName == "android" ||
-                    req.packageName == "android.system.kernel" ||
-                    req.packageName.startsWith("android.system.") ||
-                    req.packageName.startsWith("android.uid.") ||
-                    req.packageName.startsWith("unknown.uid.")
-
-                if (isSystem) {
-                    return AndroidAuditVerdict(
-                        isBlocked = false,
-                        shouldBlock = false,
-                        isSystemFlagged = true,
-                        threatDetected = true,
-                        threatType = "HIGH_FREQUENCY_PROBE",
-                        action = "FLAG_SYSTEM",
-                        riskScore = 50,
-                        attemptsCount = attempts.size
-                    )
-                } else {
-                    fallbackBlockedApps.add(req.packageName)
-                    return AndroidAuditVerdict(
-                        isBlocked = true,
-                        shouldBlock = true,
-                        threatDetected = true,
-                        threatType = "HIGH_FREQUENCY_PROBE",
-                        action = "BLOCK",
-                        riskScore = 100,
-                        attemptsCount = attempts.size
-                    )
-                }
-            }
-        }
-
-        return AndroidAuditVerdict(
-            isBlocked = false,
-            shouldBlock = false,
-            threatDetected = false,
-            action = "ALLOW",
-            attemptsCount = attempts.size
-        )
-    }
-
     /**
      * Writes raw packet bytes to a Wireshark-compatible PCAP file via the native engine.
      */
@@ -505,58 +443,7 @@ object SentinelCore {
         return try {
             val hexStr = rawBytes.joinToString("") { "%02x".format(it) }
             val resp = callNative { it.SentinelAndroidWritePcap(filePath, hexStr, timestampMs) }
-            if (resp?.contains("\"success\":true") == true || resp?.contains("\"success\": true") == true) {
-                true
-            } else {
-                fallbackWritePcap(filePath, rawBytes, timestampMs)
-            }
-        } catch (e: Exception) {
-            fallbackWritePcap(filePath, rawBytes, timestampMs)
-        }
-    }
-
-    private fun fallbackWritePcap(filePath: String, packetBytes: ByteArray, timestampMs: Long): Boolean {
-        return try {
-            val file = java.io.File(filePath)
-            file.parentFile?.mkdirs()
-            val exists = file.exists()
-            java.io.FileOutputStream(file, true).use { stream ->
-                if (!exists) {
-                    val globalHeader = byteArrayOf(
-                        0xd4.toByte(), 0xc3.toByte(), 0xb2.toByte(), 0xa1.toByte(),
-                        0x02.toByte(), 0x00.toByte(),
-                        0x04.toByte(), 0x00.toByte(),
-                        0x00.toByte(), 0x00.toByte(), 0x00.toByte(), 0x00.toByte(),
-                        0x00.toByte(), 0x00.toByte(), 0x00.toByte(), 0x00.toByte(),
-                        0xff.toByte(), 0xff.toByte(), 0x00.toByte(), 0x00.toByte(),
-                        0x65.toByte(), 0x00.toByte(), 0x00.toByte(), 0x00.toByte()
-                    )
-                    stream.write(globalHeader)
-                }
-                val sec = timestampMs / 1000
-                val usec = (timestampMs % 1000) * 1000
-                val len = packetBytes.size
-                val pcapHeader = ByteArray(16)
-                pcapHeader[0] = (sec and 0xFF).toByte()
-                pcapHeader[1] = ((sec shr 8) and 0xFF).toByte()
-                pcapHeader[2] = ((sec shr 16) and 0xFF).toByte()
-                pcapHeader[3] = ((sec shr 24) and 0xFF).toByte()
-                pcapHeader[4] = (usec and 0xFF).toByte()
-                pcapHeader[5] = ((usec shr 8) and 0xFF).toByte()
-                pcapHeader[6] = ((usec shr 16) and 0xFF).toByte()
-                pcapHeader[7] = ((usec shr 24) and 0xFF).toByte()
-                pcapHeader[8] = (len and 0xFF).toByte()
-                pcapHeader[9] = ((len shr 8) and 0xFF).toByte()
-                pcapHeader[10] = ((len shr 16) and 0xFF).toByte()
-                pcapHeader[11] = ((len shr 24) and 0xFF).toByte()
-                pcapHeader[12] = (len and 0xFF).toByte()
-                pcapHeader[13] = ((len shr 8) and 0xFF).toByte()
-                pcapHeader[14] = ((len shr 16) and 0xFF).toByte()
-                pcapHeader[15] = ((len shr 24) and 0xFF).toByte()
-                stream.write(pcapHeader)
-                stream.write(packetBytes)
-            }
-            true
+            resp?.contains("\"success\":true") == true || resp?.contains("\"success\": true") == true
         } catch (e: Exception) {
             false
         }
@@ -589,62 +476,10 @@ object SentinelCore {
                     tcpFlags, seq, ack, window, payloadHex, timestampMs
                 )
             }
-            if (resp?.contains("\"success\":true") == true || resp?.contains("\"success\": true") == true) {
-                true
-            } else {
-                fallbackSynthesizeAndWritePcap(filePath, proto, srcIP, srcPort, dstIP, dstPort, tcpFlags, seq, ack, window, payload, timestampMs)
-            }
+            resp?.contains("\"success\":true") == true || resp?.contains("\"success\": true") == true
         } catch (e: Exception) {
-            fallbackSynthesizeAndWritePcap(filePath, proto, srcIP, srcPort, dstIP, dstPort, tcpFlags, seq, ack, window, payload, timestampMs)
+            false
         }
-    }
-
-    private fun fallbackSynthesizeAndWritePcap(
-        filePath: String, proto: String, srcIP: String, srcPort: Int,
-        dstIP: String, dstPort: Int, tcpFlags: Int, seq: Long, ack: Long,
-        window: Int, payload: ByteArray?, timestampMs: Long
-    ): Boolean {
-        val payloadBytes = payload ?: ByteArray(0)
-        val isTcp = proto.equals("TCP", ignoreCase = true)
-        val ipProto = if (isTcp) 6 else 17
-        val srcBytes = try { java.net.InetAddress.getByName(srcIP).address } catch (e: Exception) { byteArrayOf(10, 0, 0, 2) }
-        val dstBytes = try { java.net.InetAddress.getByName(dstIP).address } catch (e: Exception) { byteArrayOf(8, 8, 8, 8) }
-        val totalLen = 40 + payloadBytes.size
-        val packet = ByteArray(totalLen)
-        packet[0] = 0x45.toByte()
-        packet[1] = 0x00.toByte()
-        packet[2] = ((totalLen shr 8) and 0xFF).toByte()
-        packet[3] = (totalLen and 0xFF).toByte()
-        packet[4] = 0x12.toByte()
-        packet[5] = 0x34.toByte()
-        packet[6] = 0x40.toByte()
-        packet[8] = 64.toByte()
-        packet[9] = ipProto.toByte()
-        System.arraycopy(srcBytes, 0, packet, 12, 4)
-        System.arraycopy(dstBytes, 0, packet, 16, 4)
-        if (isTcp) {
-            val sp = if (srcPort > 0) srcPort else 50000
-            packet[20] = ((sp shr 8) and 0xFF).toByte()
-            packet[21] = (sp and 0xFF).toByte()
-            packet[22] = ((dstPort shr 8) and 0xFF).toByte()
-            packet[23] = (dstPort and 0xFF).toByte()
-            packet[24] = ((seq shr 24) and 0xFF).toByte()
-            packet[25] = ((seq shr 16) and 0xFF).toByte()
-            packet[26] = ((seq shr 8) and 0xFF).toByte()
-            packet[27] = (seq and 0xFF).toByte()
-            packet[28] = ((ack shr 24) and 0xFF).toByte()
-            packet[29] = ((ack shr 16) and 0xFF).toByte()
-            packet[30] = ((ack shr 8) and 0xFF).toByte()
-            packet[31] = (ack and 0xFF).toByte()
-            packet[32] = 0x50.toByte()
-            packet[33] = (tcpFlags and 0xFF).toByte()
-            packet[34] = 0xFA.toByte()
-            packet[35] = 0xF0.toByte()
-            if (payloadBytes.isNotEmpty()) {
-                System.arraycopy(payloadBytes, 0, packet, 40, payloadBytes.size)
-            }
-        }
-        return fallbackWritePcap(filePath, packet, timestampMs)
     }
 
     /**
@@ -666,28 +501,32 @@ object SentinelCore {
 
     fun blockApp(context: Context? = null, packageName: String) {
         if (context != null && !isInitialized) getOrLoadLib(context)
-        fallbackBlockedApps.add(packageName)
         callNative { it.SentinelAndroidBlockApp(packageName) }
     }
 
     fun unblockApp(context: Context? = null, packageName: String) {
         if (context != null && !isInitialized) getOrLoadLib(context)
-        fallbackBlockedApps.remove(packageName)
-        fallbackAttempts.remove(packageName)
         callNative { it.SentinelAndroidUnblockApp(packageName) }
     }
 
     fun isAppBlocked(context: Context? = null, packageName: String): Boolean {
         if (context != null && !isInitialized) getOrLoadLib(context)
-        if (fallbackBlockedApps.contains(packageName)) return true
         val resp = callNative { it.SentinelAndroidIsAppBlocked(packageName) } ?: return false
         return resp.contains("\"blocked\":true") || resp.contains("\"blocked\": true")
     }
 
+    fun getBlockedApps(context: Context? = null): com.xprox.sentinel.core.models.BlockedAppsResult {
+        if (context != null && !isInitialized) getOrLoadLib(context)
+        val resp = callNative { it.SentinelAndroidGetBlockedApps() } ?: return com.xprox.sentinel.core.models.BlockedAppsResult()
+        return try {
+            SentinelJson.decodeFromString(com.xprox.sentinel.core.models.BlockedAppsResult.serializer(), resp)
+        } catch (e: Exception) {
+            com.xprox.sentinel.core.models.BlockedAppsResult()
+        }
+    }
+
     fun clearThreats(context: Context? = null) {
         if (context != null && !isInitialized) getOrLoadLib(context)
-        fallbackBlockedApps.clear()
-        fallbackAttempts.clear()
         callNative { it.SentinelAndroidClearThreats() }
     }
 
@@ -761,26 +600,17 @@ object SentinelCore {
         return null
     }
 
-    private val fallbackRingBuffer = java.util.concurrent.ConcurrentLinkedDeque<AndroidLogEntry>()
-    private val fallbackTotalLogged = java.util.concurrent.atomic.AtomicLong(0)
-
     /**
      * Pushes an enriched connection log entry into the native in-memory RingBuffer.
      */
     fun pushLog(entry: AndroidLogEntry): Boolean {
-        fallbackTotalLogged.incrementAndGet()
-        fallbackRingBuffer.addFirst(entry)
-        while (fallbackRingBuffer.size > 5000) {
-            fallbackRingBuffer.removeLast()
-        }
-
         val jsonStr = try {
             SentinelJson.encodeToString(com.xprox.sentinel.core.models.AndroidLogEntry.serializer(), entry)
         } catch (e: Exception) {
-            return true
+            return false
         }
         val resp = callNative { it.SentinelAndroidPushLog(jsonStr) }
-        return resp != null && resp.contains("\"success\": true")
+        return resp != null && (resp.contains("\"success\": true") || resp.contains("\"success\":true"))
     }
 
     /**
@@ -795,25 +625,7 @@ object SentinelCore {
                 Log.e(TAG, "Failed to decode logs from native ring buffer: $resp", e)
             }
         }
-
-        // Resilient Fallback for non-JNI JVM runtime
-        val qLower = query.trim().lowercase()
-        val filtered = fallbackRingBuffer.filter { e ->
-            if (portFilter > 0 && e.destinationPort != portFilter) return@filter false
-            if (qLower.isNotEmpty()) {
-                val match = e.appName.lowercase().contains(qLower) ||
-                        e.packageName.lowercase().contains(qLower) ||
-                        e.destinationIp.lowercase().contains(qLower) ||
-                        (e.serviceName?.lowercase()?.contains(qLower) == true) ||
-                        e.protocol.lowercase().contains(qLower)
-                if (!match) return@filter false
-            }
-            true
-        }
-
-        if (offset >= filtered.size) return emptyList()
-        val end = (offset + limit).coerceAtMost(filtered.size)
-        return filtered.subList(offset, end)
+        return emptyList()
     }
 
     /**
@@ -828,53 +640,15 @@ object SentinelCore {
                 Log.e(TAG, "Failed to decode log stats: $resp", e)
             }
         }
-
-        // Resilient Fallback
-        val appCounts = mutableMapOf<String, com.xprox.sentinel.core.models.AppStat>()
-        val portCounts = mutableMapOf<Int, Long>()
-        val protoBreakdown = mutableMapOf<String, Long>()
-        var threatCount = 0L
-
-        fallbackRingBuffer.forEach { e ->
-            val pkg = e.packageName.ifEmpty { "unknown" }
-            val cur = appCounts.getOrPut(pkg) { com.xprox.sentinel.core.models.AppStat(pkg, e.appName, 0) }
-            appCounts[pkg] = cur.copy(count = cur.count + 1)
-
-            if (e.destinationPort > 0) {
-                portCounts[e.destinationPort] = (portCounts[e.destinationPort] ?: 0L) + 1
-            }
-
-            val proto = e.protocol.uppercase().ifEmpty { "TCP" }
-            protoBreakdown[proto] = (protoBreakdown[proto] ?: 0L) + 1
-
-            if (e.threatType.isNotEmpty() && e.threatType != "NONE") {
-                threatCount++
-            }
-        }
-
-        val topApps = appCounts.values.sortedByDescending { it.count }.take(10)
-        val topPorts = portCounts.map { (p, c) ->
-            com.xprox.sentinel.core.models.PortStat(port = p, serviceName = "Port $p", count = c)
-        }.sortedByDescending { it.count }.take(10)
-
-        return AndroidLogStats(
-            totalConnections = fallbackTotalLogged.get(),
-            activeAppsCount = appCounts.size,
-            threatCount = threatCount,
-            protocolBreakdown = protoBreakdown,
-            topApps = topApps,
-            topPorts = topPorts
-        )
+        return AndroidLogStats()
     }
 
     /**
      * Clears all log records from the native in-memory RingBuffer.
      */
     fun clearLogs(): Boolean {
-        fallbackRingBuffer.clear()
-        fallbackTotalLogged.set(0)
         val resp = callNative { it.SentinelAndroidClearLogs() }
-        return resp != null
+        return resp != null && (resp.contains("\"success\": true") || resp.contains("\"success\":true"))
     }
 }
 

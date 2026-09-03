@@ -235,7 +235,9 @@ data class ParsedConnectionLog(
     @SerialName("src_ip") val srcIp: String = "",
     @SerialName("src_port") val srcPort: Int = 0,
     @SerialName("dest_ip") val destIp: String = "",
-    @SerialName("dest_port") val destPort: Int = 0
+    @SerialName("dest_port") val destPort: Int = 0,
+    @SerialName("is_hotspot") val isHotspot: Boolean = false,
+    @SerialName("source_type") val sourceType: String = "local_tun"
 )
 
 @Serializable
@@ -314,3 +316,11 @@ data class AndroidLogStats(
     @SerialName("topApps") val topApps: List<AppStat> = emptyList(),
     @SerialName("topPorts") val topPorts: List<PortStat> = emptyList()
 )
+
+@Serializable
+data class BlockedAppsResult(
+    @SerialName("blocked_apps") val blockedApps: List<String> = emptyList(),
+    @SerialName("blocked_destinations") val blockedDestinations: List<String> = emptyList(),
+    @SerialName("blocked_ports") val blockedPorts: List<Int> = emptyList()
+)
+

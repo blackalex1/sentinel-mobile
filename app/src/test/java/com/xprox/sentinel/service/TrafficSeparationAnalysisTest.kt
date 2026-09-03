@@ -126,8 +126,12 @@ class TrafficSeparationAnalysisTest {
         val hotspotLogLine = "from tcp:192.168.43.105:51234 accepted tcp:1.1.1.1:53"
         ConnectionAuditParser.parseAndLog(mockContext, hotspotLogLine)
 
+        // 3. Ingest log line for local IPv6 TUN traffic (fd00::2 - local phone interface)
+        val localIpv6LogLine = "from udp:[fd00::2]:56536 accepted udp:[2001:4860:4860::8888]:443"
+        ConnectionAuditParser.parseAndLog(mockContext, localIpv6LogLine)
+
         val logs = LogManager.readLogs(mockContext)
-        assertEquals("Both local and hotspot connections must be recorded. Actual logs: $logs", 2, logs.size)
+        assertEquals("All 3 connections must be recorded. Actual logs: $logs", 3, logs.size)
 
         // Verify Local Traffic Attribution
         val localLog = logs.find { it.contains("198.51.100.46:443") }
@@ -135,6 +139,11 @@ class TrafficSeparationAnalysisTest {
         assertTrue("Local entry must identify local system kernel/app", 
             localLog!!.contains("android.system.kernel") || localLog.contains("Kernel / Root"))
         assertFalse("Local entry must NOT be marked as hotspot client", localLog.contains("hotspot.client"))
+
+        // Verify Local IPv6 Traffic Attribution
+        val localIpv6Log = logs.find { it.contains("2001:4860:4860::8888:443") }
+        assertNotNull("Local IPv6 device log entry must exist", localIpv6Log)
+        assertFalse("Local IPv6 TUN entry must NOT be marked as hotspot client", localIpv6Log!!.contains("hotspot.client"))
 
         // Verify Hotspot Client Traffic Attribution
         val hotspotLog = logs.find { it.contains("1.1.1.1:53") }

@@ -4,8 +4,6 @@ import android.util.Log
 import com.xprox.sentinel.config.XrayConfigManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
-import java.net.InetAddress
-import java.net.InetSocketAddress
 import java.net.Socket
 
 object VpnNetworkHelper {
@@ -28,26 +26,9 @@ object VpnNetworkHelper {
             val first = results.firstOrNull()
             if (first != null && first.success) {
                 pingMsFlow.value = first.latencyMs.toInt()
-                return@launch
+            } else {
+                pingMsFlow.value = null
             }
-
-            // Fallback: direct socket connect
-            val measuredPing = try {
-                val ipToPing = try {
-                    InetAddress.getByName(profile.address).hostAddress
-                } catch (e: Exception) {
-                    profile.address
-                }
-                val startTime = System.currentTimeMillis()
-                Socket().use { socket ->
-                    bypassSocketProtect?.invoke(socket)
-                    socket.connect(InetSocketAddress(ipToPing, profile.port), 2000)
-                }
-                (System.currentTimeMillis() - startTime).toInt()
-            } catch (e: Exception) {
-                null
-            }
-            pingMsFlow.value = measuredPing
         }
     }
 

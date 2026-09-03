@@ -153,6 +153,7 @@ extern char* SentinelAndroidPushLog(char* logJSON);
 extern char* SentinelAndroidGetLogs(int limit, int offset, int portFilter, char* query);
 extern char* SentinelAndroidGetLogStats(void);
 extern char* SentinelAndroidClearLogs(void);
+extern char* SentinelAndroidParseConnectionLog(char* logLine);
 extern char* SentinelSetLanguage(char* lang);
 extern char* SentinelBuildConfig(char* specJSON);
 extern char* SentinelBuildServerConfig(char* specJSON);
