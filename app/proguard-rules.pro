@@ -39,3 +39,13 @@
 # Suppress warnings related to system library reflections
 -dontwarn java.io.FileDescriptor
 -dontwarn android.system.Os
+
+# JNA (Java Native Access) preservation
+-keep class com.sun.jna.** { *; }
+-keepclassmembers class * extends com.sun.jna.** { *; }
+-dontwarn com.sun.jna.**
+
+# Sentinel-Core native C-FFI models and library interface
+-keep class com.xprox.sentinel.core.models.** { *; }
+-keep interface com.xprox.sentinel.core.SentinelCore$SentinelCoreLib { *; }
+-keepclasseswithmembernames class com.xprox.sentinel.core.** { *; }

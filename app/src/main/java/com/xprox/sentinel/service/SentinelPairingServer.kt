@@ -22,7 +22,7 @@ class SentinelPairingServer(
     private val preferredPort: Int = 18080
 ) {
     private var serverSocket: ServerSocket? = null
-    private val executor = Executors.newFixedThreadPool(4)
+    private val executor = Executors.newCachedThreadPool()
     @Volatile
     private var isRunning = false
     var activePort: Int = preferredPort
@@ -97,14 +97,24 @@ class SentinelPairingServer(
                 val requestLine = reader.readLine() ?: return
                 var contentLength = 0
                 var authHeader: String? = null
+                var originHeader: String? = null
                 var line = reader.readLine()
                 while (!line.isNullOrEmpty()) {
                     if (line.startsWith("Content-Length:", ignoreCase = true)) {
                         contentLength = line.substring(15).trim().toIntOrNull() ?: 0
                     } else if (line.startsWith("Authorization:", ignoreCase = true)) {
                         authHeader = line.substring(14).trim()
+                    } else if (line.startsWith("Origin:", ignoreCase = true)) {
+                        originHeader = line.substring(7).trim()
                     }
                     line = reader.readLine()
+                }
+
+                // Security hardening: Reject cross-origin web browser requests (CSRF protection)
+                if (!originHeader.isNullOrBlank() && !originHeader.equals("null", ignoreCase = true)) {
+                    val err = "{\"success\":false,\"error\":\"Браузерные кросс-доменные запросы (CORS) заблокированы в целях безопасности\"}".toByteArray(Charsets.UTF_8)
+                    sendJsonResponse(out, 403, "Forbidden", err)
+                    return
                 }
 
                 val bearerToken = if (authHeader?.startsWith("Bearer ", ignoreCase = true) == true) {
@@ -124,16 +134,10 @@ class SentinelPairingServer(
                     requestBody = String(bodyChars, 0, readSoFar)
                 }
 
-                // Handle CORS preflight OPTIONS request
+                // Reject CORS preflight OPTIONS requests strictly
                 if (requestLine.startsWith("OPTIONS", ignoreCase = true)) {
-                    val response = "HTTP/1.1 204 No Content\r\n" +
-                            "Access-Control-Allow-Origin: *\r\n" +
-                            "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n" +
-                            "Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, *\r\n" +
-                            "Access-Control-Max-Age: 86400\r\n" +
-                            "Connection: close\r\n\r\n"
-                    out.write(response.toByteArray(Charsets.UTF_8))
-                    out.flush()
+                    val err = "{\"success\":false,\"error\":\"Method Not Allowed\"}".toByteArray(Charsets.UTF_8)
+                    sendJsonResponse(out, 405, "Method Not Allowed", err)
                     return
                 }
 
@@ -159,6 +163,12 @@ class SentinelPairingServer(
 
                 // 1. Initial Pairing Request: POST /pair/request
                 if (requestLine.startsWith("POST /pair/request", ignoreCase = true)) {
+                    if (SentinelPairingManager.hasPendingRequest()) {
+                        val busyErr = "{\"success\":false,\"error\":\"Запрос сопряжения уже ожидает подтверждения на устройстве\"}".toByteArray(Charsets.UTF_8)
+                        sendJsonResponse(out, 429, "Too Many Requests", busyErr)
+                        return
+                    }
+
                     val jsonReq = if (requestBody.isNotBlank()) JSONObject(requestBody) else JSONObject()
                     val clientName = jsonReq.optString("clientName", "Sentinel Desktop Windows")
                     val pinCode = if (jsonReq.has("pinCode")) jsonReq.optString("pinCode", "0000") else jsonReq.optString("pin", "0000")
@@ -169,9 +179,16 @@ class SentinelPairingServer(
 
                     HotspotNotificationHelper.showPairingAttemptNotification(context, clientName, pinCode)
 
-                    SentinelPairingManager.requestApproval(clientName, pinCode) { approved ->
+                    val scheduled = SentinelPairingManager.requestApproval(clientName, pinCode) { approved ->
                         userApproved = approved
                         latch.countDown()
+                    }
+
+                    if (!scheduled) {
+                        HotspotNotificationHelper.dismissPairingAttemptNotification(context)
+                        val busyErr = "{\"success\":false,\"error\":\"Не удалось запланировать сопряжение\"}".toByteArray(Charsets.UTF_8)
+                        sendJsonResponse(out, 429, "Too Many Requests", busyErr)
+                        return
                     }
 
                     // Wait up to 30 seconds for user to tap [Разрешить] on phone screen
@@ -221,23 +238,18 @@ class SentinelPairingServer(
                             put("pinVerified", pinCode)
                         }
 
-                        // Encrypt with PIN-derived key (AES-256-GCM)
-                        val pinKey = SentinelCrypto.deriveKeyFromPin(pinCode)
+                        // Encrypt with PIN-derived key (PBKDF2 if requested, fallback to SHA-256)
+                        val requestedKdf = jsonReq.optString("kdf", "")
+                        val pinKey = if (requestedKdf.equals("pbkdf2", ignoreCase = true)) {
+                            SentinelCrypto.deriveKeyFromPinPbkdf2(pinCode)
+                        } else {
+                            SentinelCrypto.deriveKeyFromPin(pinCode)
+                        }
                         val encryptedPayload = SentinelCrypto.encrypt(confidentialPayload.toString(), pinKey)
 
                         val jsonResp = JSONObject().apply {
                             put("success", true)
                             put("encryptedPayload", encryptedPayload)
-                            // Legacy/fallback unencrypted fields for backward compatibility
-                            put("token", deviceToken)
-                            put("masterKey", masterKeyBase64)
-                            put("proxyType", proxyType)
-                            put("port", port)
-                            put("socksPort", effectiveSocksPort)
-                            put("httpPort", effectiveHttpPort)
-                            put("authRequired", isAuth)
-                            if (isAuth && !username.isNullOrEmpty()) put("username", username)
-                            if (isAuth && !token.isNullOrEmpty()) put("password", token)
                         }
 
                         val respBytes = jsonResp.toString().toByteArray(Charsets.UTF_8)
@@ -469,9 +481,7 @@ class SentinelPairingServer(
     private fun sendJsonResponse(out: OutputStream, statusCode: Int, statusText: String, jsonBytes: ByteArray) {
         val response = "HTTP/1.1 $statusCode $statusText\r\n" +
                 "Content-Type: application/json; charset=UTF-8\r\n" +
-                "Access-Control-Allow-Origin: *\r\n" +
-                "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n" +
-                "Access-Control-Allow-Headers: *\r\n" +
+                "X-Content-Type-Options: nosniff\r\n" +
                 "Content-Length: ${jsonBytes.size}\r\n" +
                 "Connection: close\r\n\r\n"
         out.write(response.toByteArray(Charsets.UTF_8))

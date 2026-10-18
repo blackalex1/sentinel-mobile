@@ -17,7 +17,12 @@ object SentinelPairingManager {
     private val _activePairingRequest = MutableStateFlow<PairingRequest?>(null)
     val activePairingRequest: StateFlow<PairingRequest?> = _activePairingRequest.asStateFlow()
 
-    fun requestApproval(clientName: String, pinCode: String, onDecision: (Boolean) -> Unit) {
+    fun hasPendingRequest(): Boolean = _activePairingRequest.value != null
+
+    fun requestApproval(clientName: String, pinCode: String, onDecision: (Boolean) -> Unit): Boolean {
+        if (_activePairingRequest.value != null) {
+            return false
+        }
         _activePairingRequest.value = PairingRequest(
             clientName = clientName,
             pinCode = pinCode,
@@ -26,6 +31,7 @@ object SentinelPairingManager {
                 onDecision(approved)
             }
         )
+        return true
     }
 
     fun approveCurrent() {

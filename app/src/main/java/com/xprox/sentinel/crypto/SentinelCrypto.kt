@@ -60,6 +60,15 @@ object SentinelCrypto {
     }
 
     /**
+     * Derives a 256-bit AES key from a PIN code using PBKDF2WithHmacSHA256 (100,000 iterations).
+     */
+    fun deriveKeyFromPinPbkdf2(pin: String): ByteArray {
+        val spec = javax.crypto.spec.PBEKeySpec(pin.trim().toCharArray(), PIN_SALT.toByteArray(StandardCharsets.UTF_8), 100_000, 256)
+        val factory = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+        return factory.generateSecret(spec).encoded
+    }
+
+    /**
      * Encrypts plaintext string using AES-256-GCM.
      * Output format: Base64([12-byte IV] + [Ciphertext + 16-byte GCM Tag])
      */

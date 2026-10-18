@@ -40,8 +40,13 @@ object TetheringScanner {
             val interfaces = NetworkInterface.getNetworkInterfaces()
             while (interfaces.hasMoreElements()) {
                 val iface = interfaces.nextElement()
-                if (iface.isLoopback || iface.name.lowercase().contains("tun")) continue
                 val name = iface.name.lowercase()
+                // Ignore loopback, VPN TUN interfaces, and cellular WAN modem interfaces (rmnet, ccmni, pdp, wwan, clat)
+                if (iface.isLoopback || name.contains("tun") ||
+                    name.startsWith("rmnet") || name.startsWith("ccmni") ||
+                    name.startsWith("pdp") || name.startsWith("wwan") ||
+                    name.startsWith("clat")
+                ) continue
                 
                 val addresses = iface.inetAddresses
                 while (addresses.hasMoreElements()) {

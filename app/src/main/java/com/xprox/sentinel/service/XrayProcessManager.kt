@@ -109,27 +109,9 @@ object XrayProcessManager {
             builder.environment()["XRAY_PROTECT_PATH"] = protectPath
             
             if (tunFd != null) {
-                Log.i(TAG, "Duplicating TUN FD $tunFd to parent stdin (FD 0) and inheriting in child")
-                try {
-                    val tunFdObj = java.io.FileDescriptor()
-                    val descriptorField = java.io.FileDescriptor::class.java.getDeclaredField("descriptor").apply {
-                        isAccessible = true
-                    }
-                    descriptorField.setInt(tunFdObj, tunFd)
-                    
-                    // Direct POSIX dup2 system call to duplicate our TUN FD to FD 0
-                    android.system.Os.dup2(tunFdObj, 0)
-                    
-                    // Inherit stdin directly in the child process without opening proc files
-                    builder.redirectInput(ProcessBuilder.Redirect.INHERIT)
-                    
-                    builder.environment()["xray.tun.fd"] = "0"
-                    builder.environment()["XRAY_TUN_FD"] = "0"
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to duplicate TUN FD to parent stdin, falling back", e)
-                    builder.environment()["xray.tun.fd"] = tunFd.toString()
-                    builder.environment()["XRAY_TUN_FD"] = tunFd.toString()
-                }
+                Log.i(TAG, "Passing inherited non-CLOEXEC TUN FD $tunFd to native child process")
+                builder.environment()["xray.tun.fd"] = tunFd.toString()
+                builder.environment()["XRAY_TUN_FD"] = tunFd.toString()
             }
 
             val logFile = File(context.filesDir, "xray.log")

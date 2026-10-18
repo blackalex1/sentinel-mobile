@@ -135,8 +135,9 @@ fun exportAllLogs(
             return
         }
 
-        // 1. Create temporary .txt file inside internal files directory (aligned with file_paths.xml)
-        val file = java.io.File(context.filesDir, "x_prox_connection_logs.txt")
+        // 1. Create temporary .txt file inside internal logs directory (aligned with file_paths.xml)
+        val logsDir = java.io.File(context.filesDir, "logs").apply { if (!exists()) mkdirs() }
+        val file = java.io.File(logsDir, "x_prox_connection_logs.txt")
         file.writeText(combinedText.toString())
 
         // 2. Get secure FileProvider content URI (using the authority from AndroidManifest.xml)
@@ -172,7 +173,8 @@ fun exportXrayLogs(context: Context, xrayLogs: List<String>) {
 
         val combinedText = xrayLogs.reversed().joinToString("\n")
 
-        val file = java.io.File(context.filesDir, "xray_core_logs.txt")
+        val logsDir = java.io.File(context.filesDir, "logs").apply { if (!exists()) mkdirs() }
+        val file = java.io.File(logsDir, "xray_core_logs.txt")
         file.writeText(combinedText)
 
         val uri = androidx.core.content.FileProvider.getUriForFile(

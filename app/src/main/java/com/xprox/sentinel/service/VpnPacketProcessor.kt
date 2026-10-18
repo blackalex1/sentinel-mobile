@@ -37,7 +37,6 @@ class VpnPacketProcessor(
         Log.i(TAG, "VPN packet processing thread successfully started")
         
         val inputStream = FileInputStream(vpnInterface.fileDescriptor)
-        val outputStream = FileOutputStream(vpnInterface.fileDescriptor)
         val buffer = ByteArray(32767)
 
         try {
@@ -115,15 +114,12 @@ class VpnPacketProcessor(
                     }
 
                     if (shouldDrop) {
-                        // Blackhole: simply drop the packet by skipping outputStream.write!
+                        // Blackhole: simply drop the packet
                         continue
                     }
 
                     // Send to tracker to inspect and log sensitive port access
                     tracker.trackPacket(buffer, length)
-                    
-                    // Route/Forward packet back to local network loop
-                    outputStream.write(buffer, 0, length)
                 }
             }
         } catch (e: Exception) {
@@ -133,7 +129,6 @@ class VpnPacketProcessor(
         } finally {
             try {
                 inputStream.close()
-                outputStream.close()
             } catch (e: Exception) {
                 // Ignore closing exceptions
             }

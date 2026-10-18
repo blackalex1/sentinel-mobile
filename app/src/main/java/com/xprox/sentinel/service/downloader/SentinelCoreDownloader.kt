@@ -244,6 +244,19 @@ object SentinelCoreDownloader {
                 return@withContext false
             }
 
+            // Checksum verification if SHA-256 is present in release body/metadata
+            val sha256Pattern = Regex("(?i)\\b([a-f0-9]{64})\\b")
+            val expectedSha256 = sha256Pattern.find(release.body)?.groupValues?.get(1)
+            if (expectedSha256 != null) {
+                val computedSha256 = getFileSha256(tempFile)
+                if (!computedSha256.equals(expectedSha256, ignoreCase = true)) {
+                    Log.e(TAG, "SHA-256 checksum mismatch for ${asset.name}! Expected=$expectedSha256, Computed=$computedSha256")
+                    tempFile.delete()
+                    return@withContext false
+                }
+                Log.i(TAG, "SHA-256 checksum verified successfully: $computedSha256")
+            }
+
             // Set file permissions (executable/readable for app)
             tempFile.setReadable(true, true)
             tempFile.setWritable(true, true)
@@ -374,5 +387,17 @@ object SentinelCoreDownloader {
         } finally {
             connection?.disconnect()
         }
+    }
+
+    fun getFileSha256(file: File): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(8192)
+            var bytesRead: Int
+            while (input.read(buffer).also { bytesRead = it } != -1) {
+                digest.update(buffer, 0, bytesRead)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 }
