@@ -109,9 +109,12 @@ object XrayProcessManager {
             builder.environment()["XRAY_PROTECT_PATH"] = protectPath
             
             if (tunFd != null) {
-                Log.i(TAG, "Passing inherited non-CLOEXEC TUN FD $tunFd to native child process")
+                Log.i(TAG, "Passing inherited TUN FD $tunFd to native child process")
                 builder.environment()["xray.tun.fd"] = tunFd.toString()
                 builder.environment()["XRAY_TUN_FD"] = tunFd.toString()
+                if (tunFd == 0) {
+                    builder.redirectInput(ProcessBuilder.Redirect.INHERIT)
+                }
             }
 
             val logFile = File(context.filesDir, "xray.log")

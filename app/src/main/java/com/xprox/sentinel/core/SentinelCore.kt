@@ -286,7 +286,7 @@ object SentinelCore {
                 String.format(java.util.Locale.US, "%.1f MB/s", bytesPerSec / (1024.0 * 1024.0))
             }
         }
-        return "↓ ${formatBytes(rxBytesPerSec)}  |  ↑ ${formatBytes(txBytesPerSec)}"
+        return "↓ ${formatBytes(rxBytesPerSec)} | ↑ ${formatBytes(txBytesPerSec)}"
     }
 
     /**

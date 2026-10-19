@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
  */
 object VpnSpeedMonitor {
     fun formatSpeed(bytesPerSec: Long): String {
-        return SentinelCore.formatTrafficSpeed(bytesPerSec, 0L).substringAfter("↓ ").substringBefore("  |")
+        return SentinelCore.formatTrafficSpeed(bytesPerSec, 0L).substringAfter("↓ ").substringBefore("|").trim()
     }
 
     fun start(

@@ -667,14 +667,14 @@ fun DashboardRadarButton(
                         shape = RoundedCornerShape(8.dp),
                         border = BorderStroke(1.dp, pingColor.copy(alpha = 0.35f)),
                         modifier = Modifier
-                            .weight(1f)
+                            .weight(if (isRunning && speedText.isNotEmpty()) 0.8f else 1f)
                             .clickable(enabled = hasProfile && onPingClick != null) {
                                 triggerHapticFeedback(12L)
                                 onPingClick?.invoke()
                             }
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center
                         ) {
@@ -693,7 +693,7 @@ fun DashboardRadarButton(
                                 } else {
                                     string("checking_ping")
                                 },
-                                fontSize = 11.sp,
+                                fontSize = 10.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = pingColor,
                                 fontFamily = FontFamily.Monospace,
@@ -708,19 +708,20 @@ fun DashboardRadarButton(
                             color = CyberCyan.copy(alpha = 0.10f),
                             shape = RoundedCornerShape(8.dp),
                             border = BorderStroke(1.dp, CyberCyan.copy(alpha = 0.30f)),
-                            modifier = Modifier.weight(1.3f)
+                            modifier = Modifier.weight(1.4f)
                         ) {
                             Box(
                                 contentAlignment = Alignment.Center,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp)
                             ) {
                                 Text(
                                     text = speedText,
-                                    fontSize = 11.sp,
+                                    fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = CyberCyan,
                                     fontFamily = FontFamily.Monospace,
-                                    maxLines = 1
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }

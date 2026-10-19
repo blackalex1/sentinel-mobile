@@ -419,29 +419,18 @@ class VpnManagerService : VpnService() {
 
             // 3. Start the actual native Xray Core subprocess or fall back to standby mode
             if (XrayProcessManager.isInstalled(this)) {
-                // Duplicate the ParcelFileDescriptor so we can detach it safely without revoking the VPN tunnel
-                val dupPfd = pfd.dup()
-                val rawFd = dupPfd.detachFd()
-                activeRawFd = rawFd
-                Log.i(TAG, "Duplicated and detached TUN file descriptor: $rawFd")
-
-                // Clear FD_CLOEXEC flag on the detached raw file descriptor
+                // Duplicate TUN file descriptor to STDIN (FD 0) so it survives ProcessBuilder fork/exec
                 try {
-                    val fdObj = java.io.FileDescriptor()
-                    val fdField = java.io.FileDescriptor::class.java.getDeclaredField("descriptor").apply {
-                        isAccessible = true
-                    }
-                    fdField.setInt(fdObj, rawFd)
-
-                    val flags = android.system.Os.fcntlInt(fdObj, android.system.OsConstants.F_GETFD, 0)
-                    android.system.Os.fcntlInt(fdObj, android.system.OsConstants.F_SETFD, flags and android.system.OsConstants.FD_CLOEXEC.inv())
-                    Log.i(TAG, "Successfully cleared FD_CLOEXEC on detached TUN raw FD: $rawFd")
+                    android.system.Os.dup2(pfd.fileDescriptor, 0)
+                    activeRawFd = 0
+                    Log.i(TAG, "Successfully dup2'd TUN FD to STDIN (FD 0)")
+                    
+                    // Start native Xray process passing FD 0
+                    XrayProcessManager.startProcess(this, configFile.absolutePath, 0)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to clear FD_CLOEXEC on detached TUN raw FD", e)
+                    Log.e(TAG, "Failed to dup2 TUN FD to STDIN", e)
+                    activeRawFd = -1
                 }
-
-                // Start native Xray process passing our established TUN FD
-                XrayProcessManager.startProcess(this, configFile.absolutePath, rawFd)
             } else {
                 Log.w(TAG, "Xray-core binary not downloaded yet. Running in tunnel-auditor standby mode.")
             }
@@ -727,15 +716,12 @@ class VpnManagerService : VpnService() {
         
         if (activeRawFd != -1) {
             try {
-                val fdObj = java.io.FileDescriptor()
-                val fdField = java.io.FileDescriptor::class.java.getDeclaredField("descriptor").apply {
-                    isAccessible = true
-                }
-                fdField.setInt(fdObj, activeRawFd)
-                android.system.Os.close(fdObj)
-                Log.i(TAG, "Successfully closed raw TUN FD: $activeRawFd")
+                val devNull = android.system.Os.open("/dev/null", android.system.OsConstants.O_RDONLY, 0)
+                android.system.Os.dup2(devNull, 0)
+                android.system.Os.close(devNull)
+                Log.i(TAG, "Successfully restored STDIN (FD 0) to /dev/null")
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to close raw TUN FD: $activeRawFd", e)
+                Log.w(TAG, "Failed to restore STDIN to /dev/null", e)
             }
             activeRawFd = -1
         }

@@ -48,7 +48,7 @@ fun XrayCoreCard(
     var downloadProgress by remember { mutableStateOf(0f) }
     var isDownloading by remember { mutableStateOf(false) }
     var isDownloadingDbs by remember { mutableStateOf(false) }
-    var downloadStatusText by remember { mutableStateOf(LanguageManager.getString("core_status_downloading")) }
+    var downloadStatusText by remember { mutableStateOf(LanguageManager.getString("xray_status_downloading")) }
 
     val triggerCheckUpdates: (Boolean) -> Unit = { pr ->
         isChecking = true
@@ -67,7 +67,7 @@ fun XrayCoreCard(
 
     val triggerUpdateConfirm: (String) -> Unit = { targetVersion ->
         isDownloading = true
-        downloadStatusText = LanguageManager.getString("core_status_updating")
+        downloadStatusText = LanguageManager.getString("xray_status_updating")
         coroutineScope.launch {
             if (isVpnActive) {
                 val intent = Intent(context, VpnManagerService::class.java)
@@ -121,7 +121,7 @@ fun XrayCoreCard(
             onDismissRequest = { showVersionDialog = false },
             title = {
                 Text(
-                    text = string("core_select_version_title"),
+                    text = string("xray_select_version_title"),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextWhite,
@@ -316,7 +316,7 @@ fun XrayCoreCard(
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    text = string("core_allow_prerelease_desc"),
+                    text = string("xray_allow_prerelease_desc"),
                     fontSize = 11.sp,
                     color = TextGray
                 )
