@@ -29,6 +29,8 @@ import androidx.navigation3.runtime.NavKey
 import com.xprox.sentinel.MainActivity
 import com.xprox.sentinel.data.string
 import com.xprox.sentinel.service.SentinelPairingManager
+import com.xprox.sentinel.service.AppUpdateManager
+import androidx.compose.foundation.shape.CircleShape
 import com.xprox.sentinel.theme.*
 import com.xprox.sentinel.ui.components.CosmicBackground
 import com.xprox.sentinel.ui.components.DoppelrandCard
@@ -53,6 +55,7 @@ fun MainScreen(
 
     val activePairingRequest by SentinelPairingManager.activePairingRequest.collectAsState()
     val showDisconnectConfirm by MainActivity.showDisconnectConfirmFlow.collectAsState()
+    val hasAppUpdate by AppUpdateManager.hasUpdate.collectAsState()
 
     CosmicBackground {
         Scaffold(
@@ -125,6 +128,26 @@ fun MainScreen(
                                             softWrap = false,
                                             textAlign = TextAlign.Center
                                         )
+                                    }
+
+                                    if (tab == Tab.Settings && hasAppUpdate) {
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .padding(top = 4.dp, end = 10.dp)
+                                                .size(16.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFFEF4444)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = "!",
+                                                color = Color.White,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                fontFamily = FontFamily.Monospace
+                                            )
+                                        }
                                     }
                                 }
                             }

@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import com.xprox.sentinel.data.LanguageManager
 import com.xprox.sentinel.data.string
 import com.xprox.sentinel.service.VpnManagerService
+import com.xprox.sentinel.service.AppUpdateManager
 import com.xprox.sentinel.theme.*
 import com.xprox.sentinel.ui.components.*
 
@@ -33,6 +34,8 @@ fun SettingsScreen() {
     val scrollState = rememberScrollState()
 
     var selectedTab by remember { mutableStateOf("general") } // "general", "security", "system"
+    var showUpdateSheet by remember { mutableStateOf(false) }
+    val hasAppUpdate by AppUpdateManager.hasUpdate.collectAsState()
 
     CosmicBackground {
         Column(
@@ -73,7 +76,7 @@ fun SettingsScreen() {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     listOf(
-                        "general" to if (isRu) "⚙️ Основные" else "⚙️ General",
+                        "general" to if (isRu) (if (hasAppUpdate) "⚙️ Основные (!)" else "⚙️ Основные") else (if (hasAppUpdate) "⚙️ General (!)" else "⚙️ General"),
                         "security" to if (isRu) "🛡️ Защита" else "🛡️ Security",
                         "system" to if (isRu) "⚡ Система" else "⚡ System"
                     ).forEach { (tabKey, tabLabel) ->
@@ -134,6 +137,10 @@ fun SettingsScreen() {
                     Spacer(modifier = Modifier.height(14.dp))
                     DnsSettingsCard(context = context)
                     Spacer(modifier = Modifier.height(14.dp))
+                    AppUpdateCard(
+                        onOpenUpdateDetails = { showUpdateSheet = true }
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
                     AboutAppCard()
                 }
                 "security" -> {
@@ -179,6 +186,12 @@ fun SettingsScreen() {
             }
 
             Spacer(modifier = Modifier.height(96.dp))
+        }
+
+        if (showUpdateSheet) {
+            AppUpdateBottomSheet(
+                onDismissRequest = { showUpdateSheet = false }
+            )
         }
     }
 }

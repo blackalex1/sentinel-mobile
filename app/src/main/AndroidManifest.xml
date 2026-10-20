@@ -14,6 +14,8 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Allows auto-restart of VPN after device reboot -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Required for in-app self-updating -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <queries>
         <intent>
