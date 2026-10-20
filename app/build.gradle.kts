@@ -60,6 +60,9 @@ android {
       resources {
         excludes += "/META-INF/{AL2.0,LGPL2.1}"
       }
+      jniLibs {
+        useLegacyPackaging = false
+      }
     }
 }
 
@@ -109,9 +112,12 @@ dependencies {
   // Jetpack Security for EncryptedSharedPreferences
   implementation("androidx.security:security-crypto:1.1.0")
 
-  // JNA for Native Go Sentinel-Core C-FFI
-  implementation("net.java.dev.jna:jna:5.14.0@aar")
-  testImplementation("net.java.dev.jna:jna:5.14.0")
+  // JNA for Native Go Sentinel-Core C-FFI (16 KB page-aligned in 5.16.0+)
+  implementation("net.java.dev.jna:jna:5.16.0@aar")
+  testImplementation("net.java.dev.jna:jna:5.16.0")
+
+  // AndroidX Graphics Path (16 KB page-aligned in 1.1.0)
+  implementation("androidx.graphics:graphics-path:1.1.0")
 
   // Kotlinx Serialization JSON
   implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
