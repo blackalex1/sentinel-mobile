@@ -19,7 +19,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 object AppUpdateManager {
-    const val CURRENT_VERSION = "0.0.1"
+    const val CURRENT_VERSION = "0.0.3"
 
     private val _hasUpdate = MutableStateFlow(false)
     val hasUpdate: StateFlow<Boolean> = _hasUpdate.asStateFlow()
@@ -72,7 +72,7 @@ object AppUpdateManager {
                 val conn = (url.openConnection() as HttpURLConnection).apply {
                     connectTimeout = 6000
                     readTimeout = 6000
-                    setRequestProperty("User-Agent", "Sentinel-Android-Client/0.0.1")
+                    setRequestProperty("User-Agent", "Sentinel-Android-Client/$CURRENT_VERSION")
                     setRequestProperty("Accept", "application/vnd.github.v3+json")
                 }
 
@@ -139,7 +139,7 @@ object AppUpdateManager {
                 val conn = (url.openConnection() as HttpURLConnection).apply {
                     connectTimeout = 10000
                     readTimeout = 30000
-                    setRequestProperty("User-Agent", "Sentinel-Android-Client/0.0.1")
+                    setRequestProperty("User-Agent", "Sentinel-Android-Client/$CURRENT_VERSION")
                     instanceFollowRedirects = true
                 }
 

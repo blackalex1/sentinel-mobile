@@ -12,8 +12,8 @@ android {
         manifestPlaceholders["appName"] = "Sentinel"
         minSdk = 28
         targetSdk = 28
-        versionCode = 2
-        versionName = "0.0.2"
+        versionCode = 3
+        versionName = "0.0.3"
 
         ndk {
             abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86_64"))
