@@ -40,6 +40,10 @@
 -dontwarn java.io.FileDescriptor
 -dontwarn android.system.Os
 
+# Tink and Google crypto / annotation warnings
+-dontwarn com.google.errorprone.annotations.**
+-dontwarn javax.annotation.**
+
 # JNA (Java Native Access) preservation
 -keep class com.sun.jna.** { *; }
 -keepclassmembers class * extends com.sun.jna.** { *; }
