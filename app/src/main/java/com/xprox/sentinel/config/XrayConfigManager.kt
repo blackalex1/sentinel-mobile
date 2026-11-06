@@ -100,12 +100,28 @@ object XrayConfigManager {
         )
     }
 
+    fun getActiveConfigFile(context: Context): File = File(context.filesDir, SECURE_CONFIG_NAME)
+
     /**
-     * Compiles the secure client config using the Sentinel-Core Go engine.
+     * Reads the active secure config JSON from disk if it exists.
+     */
+    fun readActiveConfigJson(context: Context): String? {
+        val file = getActiveConfigFile(context)
+        return if (file.exists() && file.length() > 0) {
+            try {
+                file.readText(Charsets.UTF_8)
+            } catch (e: Exception) {
+                null
+            }
+        } else null
+    }
+
+    /**
+     * Builds the unified ConfigSpec for Sentinel-Core Go engine.
      * All routing presets (RU, torrents, ads, etc.) and security policies are compiled
      * directly by Sentinel-Core as the single source of truth.
      */
-    fun compileSecureConfig(
+    fun buildConfigSpec(
         context: Context,
         profile: ServerProfile,
         creds: LocalProxyCredentials,
@@ -119,9 +135,7 @@ object XrayConfigManager {
         lanHttpPort: Int = 10809,
         lanSocksPort: Int = 10808,
         captureProxyPort: Int = 0
-    ): File {
-        val configFile = File(context.filesDir, SECURE_CONFIG_NAME)
-
+    ): ConfigSpec {
         // 1. Resolve target core
         val isHysteria = profile.type.equals("HYSTERIA2", ignoreCase = true) || profile.type.equals("HY2", ignoreCase = true)
         val targetCore = if (isHysteria) "singbox" else "xray"
@@ -297,7 +311,7 @@ object XrayConfigManager {
             overrideDns = true
         )
 
-        val spec = ConfigSpec(
+        return ConfigSpec(
             targetCore = targetCore,
             serverNode = profile.toCoreProfile(),
             clientInbound = clientInbound,
@@ -307,8 +321,46 @@ object XrayConfigManager {
             logLevel = "info",
             rawJsonConfig = if (profile.fullJsonConfig.isNotEmpty()) profile.fullJsonConfig else null
         )
+    }
 
-        // 5. Build configuration via Sentinel-Core Go Engine (Single Source of Truth)
+    /**
+     * Compiles the secure client config using the Sentinel-Core Go engine.
+     * All routing presets (RU, torrents, ads, etc.) and security policies are compiled
+     * directly by Sentinel-Core as the single source of truth.
+     */
+    fun compileSecureConfig(
+        context: Context,
+        profile: ServerProfile,
+        creds: LocalProxyCredentials,
+        allowedApps: List<String> = emptyList(),
+        blockedApps: List<String> = emptyList(),
+        geoipRules: List<String> = emptyList(),
+        geositeRules: List<String> = emptyList(),
+        lanAuthEnabled: Boolean = false,
+        lanCreds: LocalProxyCredentials? = null,
+        tetheringIps: List<String> = emptyList(),
+        lanHttpPort: Int = 10809,
+        lanSocksPort: Int = 10808,
+        captureProxyPort: Int = 0
+    ): File {
+        val configFile = getActiveConfigFile(context)
+        val spec = buildConfigSpec(
+            context = context,
+            profile = profile,
+            creds = creds,
+            allowedApps = allowedApps,
+            blockedApps = blockedApps,
+            geoipRules = geoipRules,
+            geositeRules = geositeRules,
+            lanAuthEnabled = lanAuthEnabled,
+            lanCreds = lanCreds,
+            tetheringIps = tetheringIps,
+            lanHttpPort = lanHttpPort,
+            lanSocksPort = lanSocksPort,
+            captureProxyPort = captureProxyPort
+        )
+
+        // Build configuration via Sentinel-Core Go Engine (Single Source of Truth)
         val buildResult = SentinelCore.buildConfig(spec)
         if (buildResult.configJson.isNotEmpty()) {
             configFile.writeText(buildResult.configJson, Charsets.UTF_8)
@@ -317,5 +369,65 @@ object XrayConfigManager {
         }
 
         throw IllegalStateException("Sentinel-Core failed to compile configuration: ${buildResult.error}")
+    }
+
+    /**
+     * Compiles a preview config JSON for the active or specified profile using Sentinel-Core
+     * without starting the VPN process.
+     */
+    fun buildPreviewConfigJson(
+        context: Context,
+        profile: ServerProfile? = null
+    ): Pair<String, String?> {
+        return try {
+            val targetProfile = profile
+                ?: XrayProfilePersistence.resolveActiveProfile(context)
+                ?: ServerProfile(name = "Direct", address = "127.0.0.1", port = 1080, type = "DIRECT")
+
+            val port = XrayProfilePersistence.loadLocalProxyPort(context)
+            val username = XrayProfilePersistence.loadLocalProxyUsername(context).ifEmpty { "preview_user" }
+            val token = XrayProfilePersistence.loadLocalProxyPassword(context).ifEmpty { "preview_token" }
+            val creds = LocalProxyCredentials(port = port, username = username, token = token)
+
+            val isLanSharingEnabled = XrayProfilePersistence.loadLanSharing(context)
+            val isLanHttp = XrayProfilePersistence.loadLanSharingHttp(context)
+            val isLanSocks = XrayProfilePersistence.loadLanSharingSocks(context)
+            val isLanAuth = XrayProfilePersistence.loadLanSharingAuth(context)
+            val lanCreds = if (isLanAuth) LocalProxyCredentials(
+                port = 0,
+                username = XrayProfilePersistence.loadLanSharingUsername(context).ifEmpty { "lan_user" },
+                token = XrayProfilePersistence.loadLanSharingPassword(context).ifEmpty { "lan_token" }
+            ) else null
+
+            val allowedApps = XrayProfilePersistence.loadAllowedApps(context)
+            val blockedApps = XrayProfilePersistence.loadBlockedApps(context).toList()
+            val geoipRules = XrayProfilePersistence.loadGeoIpRules(context)
+            val geositeRules = XrayProfilePersistence.loadGeoSiteRules(context)
+            val lanHttpPort = if (isLanHttp) XrayProfilePersistence.loadLanSharingHttpPort(context) else 0
+            val lanSocksPort = if (isLanSocks) XrayProfilePersistence.loadLanSharingSocksPort(context) else 0
+
+            val spec = buildConfigSpec(
+                context = context,
+                profile = targetProfile,
+                creds = creds,
+                allowedApps = allowedApps,
+                blockedApps = blockedApps,
+                geoipRules = geoipRules,
+                geositeRules = geositeRules,
+                lanAuthEnabled = isLanAuth,
+                lanCreds = lanCreds,
+                lanHttpPort = lanHttpPort,
+                lanSocksPort = lanSocksPort
+            )
+
+            val buildResult = SentinelCore.buildConfig(spec)
+            if (buildResult.configJson.isNotEmpty()) {
+                Pair(buildResult.configJson, null)
+            } else {
+                Pair("", buildResult.error ?: "Sentinel-Core compilation error")
+            }
+        } catch (e: Exception) {
+            Pair("", e.message ?: "Failed to generate preview")
+        }
     }
 }

@@ -49,3 +49,12 @@
 -keep class com.xprox.sentinel.core.models.** { *; }
 -keep interface com.xprox.sentinel.core.SentinelCore$SentinelCoreLib { *; }
 -keepclasseswithmembernames class com.xprox.sentinel.core.** { *; }
+
+# Strip logging calls in release builds to prevent leaking connection details and server configurations (CWE-532, MSTG-STORAGE-3)
+-assumenosideeffects class android.util.Log {
+    public static boolean isLoggable(java.lang.String, int);
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+    public static int w(...);
+}

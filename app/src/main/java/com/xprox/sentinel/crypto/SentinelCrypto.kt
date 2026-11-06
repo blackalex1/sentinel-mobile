@@ -73,8 +73,11 @@ object SentinelCrypto {
      * Output format: Base64([12-byte IV] + [Ciphertext + 16-byte GCM Tag])
      */
     fun encrypt(plaintext: String, key: ByteArray): String {
-        val iv = ByteArray(GCM_IV_LENGTH)
-        secureRandom.nextBytes(iv)
+        // Enforce a unique cryptographically secure 12-byte initialization vector (IV / nonce)
+        // for each encryption operation to prevent GHASH authentication key recovery (CWE-323)
+        val iv = ByteArray(GCM_IV_LENGTH).apply {
+            SecureRandom().nextBytes(this)
+        }
 
         val cipher = Cipher.getInstance(AES_GCM_ALGORITHM)
         val keySpec = SecretKeySpec(key, "AES")

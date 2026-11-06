@@ -4,6 +4,7 @@ import android.net.LocalServerSocket
 import android.net.LocalSocket
 import android.net.LocalSocketAddress
 import android.net.VpnService
+import android.os.Process
 import android.util.Log
 import java.io.File
 import java.io.FileDescriptor
@@ -52,6 +53,16 @@ class ProtectServer(
                     } ?: break
 
                     try {
+                        // Security verification: Only connections from processes under our own UID
+                        // (same application or co-located native core process) are allowed to protect file descriptors.
+                        val credentials = client.peerCredentials
+                        val myUid = Process.myUid()
+                        if (credentials == null || credentials.uid != myUid) {
+                            Log.w(TAG, "Rejected unauthorized protect connection from UID: ${credentials?.uid} (expected UID: $myUid)")
+                            client.close()
+                            continue
+                        }
+
                         val input = client.inputStream
                         val buf = ByteArray(1)
                         val readBytes = input.read(buf)

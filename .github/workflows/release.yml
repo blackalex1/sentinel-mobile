@@ -25,15 +25,18 @@ jobs:
 
       - name: Determine Release Version
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG_NAME="${{ github.event.inputs.version }}"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG_NAME="$INPUT_VERSION"
           else
             TAG_NAME="${GITHUB_REF#refs/tags/}"
           fi
           if [ -z "$TAG_NAME" ]; then TAG_NAME="v0.0.1"; fi
           echo "Determined Release Version: $TAG_NAME"
-          echo "RELEASE_TAG=${TAG_NAME}" >> $GITHUB_ENV
+          echo "RELEASE_TAG=${TAG_NAME}" >> "$GITHUB_ENV"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -52,6 +55,11 @@ jobs:
 
       - name: Sign and Package APK
         shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           mkdir -p release-artifacts
           RAW_APK=$(find app/build/outputs/apk/foss/release -name "*.apk" | head -n 1)
@@ -65,13 +73,13 @@ jobs:
           BUILD_TOOLS=$(ls -d $ANDROID_HOME/build-tools/* | tail -n 1)
           echo "Using Android Build Tools: $BUILD_TOOLS"
 
-          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+          if [ -n "$KEYSTORE_BASE64" ]; then
             echo "==> Signing with secret keystore from repository secrets..."
-            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release.keystore
+            echo "$KEYSTORE_BASE64" | base64 -d > release.keystore
             $BUILD_TOOLS/apksigner sign --ks release.keystore \
-              --ks-pass "pass:${{ secrets.KEYSTORE_PASSWORD }}" \
-              --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
-              --key-pass "pass:${{ secrets.KEY_PASSWORD }}" \
+              --ks-pass "pass:$KEYSTORE_PASSWORD" \
+              --ks-key-alias "$KEY_ALIAS" \
+              --key-pass "pass:$KEY_PASSWORD" \
               --out "$OUT_APK" "$RAW_APK"
           else
             echo "==> Signing with auto-generated release keystore..."

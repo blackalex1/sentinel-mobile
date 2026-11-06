@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xprox.sentinel.data.LanguageManager
@@ -33,7 +34,7 @@ fun SettingsScreen() {
     val isVpnActive by VpnManagerService.isRunningFlow.collectAsState()
     val scrollState = rememberScrollState()
 
-    var selectedTab by remember { mutableStateOf("general") } // "general", "security", "system"
+    var selectedTab by remember { mutableStateOf("general") } // "general", "security", "system", "json"
     var showUpdateSheet by remember { mutableStateOf(false) }
     val hasAppUpdate by AppUpdateManager.hasUpdate.collectAsState()
 
@@ -62,14 +63,14 @@ fun SettingsScreen() {
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Category Tabs Bar (General / Security / System)
+            // Category Tabs Bar (General / Security / System / JSON)
             Surface(
                 color = DarkCardElevated,
                 shape = RoundedCornerShape(12.dp),
                 border = BorderStroke(1.dp, CardBorder),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(40.dp)
+                    .height(42.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxSize(),
@@ -78,7 +79,8 @@ fun SettingsScreen() {
                     listOf(
                         "general" to if (isRu) (if (hasAppUpdate) "⚙️ Основные (!)" else "⚙️ Основные") else (if (hasAppUpdate) "⚙️ General (!)" else "⚙️ General"),
                         "security" to if (isRu) "🛡️ Защита" else "🛡️ Security",
-                        "system" to if (isRu) "⚡ Система" else "⚡ System"
+                        "system" to if (isRu) "⚡ Система" else "⚡ System",
+                        "json" to "{ } JSON"
                     ).forEach { (tabKey, tabLabel) ->
                         val isSelected = selectedTab == tabKey
 
@@ -105,9 +107,11 @@ fun SettingsScreen() {
                             Text(
                                 text = tabLabel,
                                 color = tabTextColor,
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
+                                fontFamily = FontFamily.Monospace,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -182,6 +186,22 @@ fun SettingsScreen() {
                     NotificationSettingsCard(context = context)
                     Spacer(modifier = Modifier.height(14.dp))
                     LanSharingCard(context = context)
+                }
+                "json" -> {
+                    Text(
+                        text = "04 // XRAY RUNTIME JSON CONFIG",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = ElectricViolet,
+                        letterSpacing = 1.5.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    ConfigJsonViewerCard(
+                        context = context,
+                        isVpnActive = isVpnActive
+                    )
                 }
             }
 

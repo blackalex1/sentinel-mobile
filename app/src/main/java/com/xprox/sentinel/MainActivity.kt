@@ -20,6 +20,7 @@ class MainActivity : ComponentActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    window.decorView.filterTouchesWhenObscured = true
     LanguageManager.init(applicationContext)
     com.xprox.sentinel.core.SentinelCore.init(applicationContext)
     com.xprox.sentinel.service.VpnLifecycleInitiator.init(applicationContext)
