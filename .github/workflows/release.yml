@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Determine Release Version
         shell: bash
@@ -39,13 +39,13 @@ jobs:
           echo "RELEASE_TAG=${TAG_NAME}" >> "$GITHUB_ENV"
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@3a4f6e1af504cf6a31855fa899c6aa5355ba6c12 # v4.7.0
         with:
           distribution: 'temurin'
           java-version: '17'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@94b5068f5732d9d3e8584b9f86e00f681a773b0d # v4.3.0
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -99,7 +99,7 @@ jobs:
           cat SHA256SUMS.txt
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@c95fe1489396fe8a9eb872386ac92a23c4b34498 # v2.2.1
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           name: Sentinel Mobile ${{ env.RELEASE_TAG }}
