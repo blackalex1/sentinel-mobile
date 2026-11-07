@@ -114,4 +114,31 @@ class ProxyLinkParserTest {
         assertTrue(exported.contains("socks5://") || exported.contains("socks://"))
         assertTrue(exported.contains("socks-server.com:1080"))
     }
+
+    @Test
+    fun testIPv6VlessParsing() {
+        val link = "vless://00000000-0000-0000-0000-000000000042@[2001:db8:1000::1]:443?security=reality&sni=node.example.test#TestIPv6Vless"
+        val profile = ProxyLinkParser.parse(link)
+        assertNotNull("Sentinel-Core must successfully parse IPv6 VLESS URI", profile)
+        assertEquals("TestIPv6Vless", profile!!.name)
+        assertEquals("2001:db8:1000::1", profile.address)
+        assertEquals(443, profile.port)
+        assertEquals("00000000-0000-0000-0000-000000000042", profile.uuid)
+
+        val exported = ProxyLinkParser.export(profile)
+        assertTrue("Exported URI must retain bracketed IPv6", exported.contains("@[2001:db8:1000::1]:443"))
+    }
+
+    @Test
+    fun testIPv6Hysteria2Parsing() {
+        val link = "hysteria2://mock_pass@[2001:db8:cafe::42]:8443?sni=node.example.test#TestIPv6Hy2"
+        val profile = ProxyLinkParser.parse(link)
+        assertNotNull("Sentinel-Core must successfully parse IPv6 Hysteria2 URI", profile)
+        assertEquals("TestIPv6Hy2", profile!!.name)
+        assertEquals("2001:db8:cafe::42", profile.address)
+        assertEquals(8443, profile.port)
+
+        val exported = ProxyLinkParser.export(profile)
+        assertTrue("Exported Hysteria 2 must retain bracketed IPv6", exported.contains("@[2001:db8:cafe::42]:8443"))
+    }
 }
