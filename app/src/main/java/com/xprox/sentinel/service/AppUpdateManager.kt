@@ -19,7 +19,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 object AppUpdateManager {
-    const val CURRENT_VERSION = "0.0.3"
+    val CURRENT_VERSION: String = com.xprox.sentinel.BuildConfig.VERSION_NAME
 
     private val _hasUpdate = MutableStateFlow(false)
     val hasUpdate: StateFlow<Boolean> = _hasUpdate.asStateFlow()

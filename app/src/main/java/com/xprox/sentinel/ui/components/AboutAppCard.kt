@@ -44,7 +44,7 @@ fun AboutAppCard() {
             Spacer(modifier = Modifier.width(12.dp))
             Column {
                 Text(
-                    text = "Sentinel Mobile v0.0.1",
+                    text = "Sentinel Mobile v${com.xprox.sentinel.BuildConfig.VERSION_NAME}",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextWhite,
