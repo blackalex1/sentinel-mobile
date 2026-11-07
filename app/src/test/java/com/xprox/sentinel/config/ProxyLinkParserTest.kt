@@ -141,4 +141,55 @@ class ProxyLinkParserTest {
         val exported = ProxyLinkParser.export(profile)
         assertTrue("Exported Hysteria 2 must retain bracketed IPv6", exported.contains("@[2001:db8:cafe::42]:8443"))
     }
+
+    @Test
+    fun testIPv6TrojanParsing() {
+        val link = "trojan://mock_pass@[2001:db8:beef::99]:443?security=tls&sni=node.example.test#TestIPv6Trojan"
+        val profile = ProxyLinkParser.parse(link)
+        assertNotNull("Sentinel-Core must successfully parse IPv6 Trojan URI", profile)
+        assertEquals("TestIPv6Trojan", profile!!.name)
+        assertEquals("2001:db8:beef::99", profile.address)
+        assertEquals(443, profile.port)
+
+        val exported = ProxyLinkParser.export(profile)
+        assertTrue("Exported Trojan must retain bracketed IPv6", exported.contains("@[2001:db8:beef::99]:443"))
+    }
+
+    @Test
+    fun testIPv6ShadowsocksParsing() {
+        val link = "ss://YWVzLTI1Ni1nY206cGFzc3dvcmQ=@[fd00::1]:8388#TestIPv6SS"
+        val profile = ProxyLinkParser.parse(link)
+        assertNotNull("Sentinel-Core must successfully parse IPv6 Shadowsocks URI", profile)
+        assertEquals("TestIPv6SS", profile!!.name)
+        assertEquals("fd00::1", profile.address)
+        assertEquals(8388, profile.port)
+
+        val exported = ProxyLinkParser.export(profile)
+        assertTrue("Exported Shadowsocks must retain bracketed IPv6", exported.contains("@[fd00::1]:8388"))
+    }
+
+    @Test
+    fun testIPv6WireGuardParsing() {
+        val link = "wireguard://aGVsbG9fd2lyZWd1YXJkX3ByaXZhdGVfa2V5XzEyMw==@[2001:db8:3000::8]:51820?publickey=pubkey&ip=fd00::2/64#TestIPv6WG"
+        val profile = ProxyLinkParser.parse(link)
+        assertNotNull("Sentinel-Core must successfully parse IPv6 WireGuard URI", profile)
+        assertEquals("TestIPv6WG", profile!!.name)
+        assertEquals("2001:db8:3000::8", profile.address)
+        assertEquals(51820, profile.port)
+
+        val exported = ProxyLinkParser.export(profile)
+        assertTrue("Exported WireGuard must retain bracketed IPv6", exported.contains("@[2001:db8:3000::8]:51820"))
+    }
+
+    @Test
+    fun testIPv6UnbracketedNormalization() {
+        val link = "vless://00000000-0000-0000-0000-000000000042@2001:db8:1000::1:443?security=reality&sni=node.example.test#TestUnbracketed"
+        val profile = ProxyLinkParser.parse(link)
+        assertNotNull("Sentinel-Core must successfully normalize unbracketed IPv6 URI", profile)
+        assertEquals("2001:db8:1000::1", profile!!.address)
+        assertEquals(443, profile.port)
+
+        val exported = ProxyLinkParser.export(profile)
+        assertTrue("Exported URI must be formatted with RFC 3986 brackets", exported.contains("@[2001:db8:1000::1]:443"))
+    }
 }
