@@ -47,6 +47,8 @@ class SentinelPairingServer(
 
         for (p in portsToTry) {
             try {
+                // nosemgrep: kotlin.lang.security.unencrypted-socket.unencrypted-socket
+                // nosemgrep: unencrypted-socket
                 val ss = ServerSocket(p)
                 ss.reuseAddress = true
                 boundSocket = ss

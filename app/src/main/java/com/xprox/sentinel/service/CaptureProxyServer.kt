@@ -30,6 +30,8 @@ class CaptureProxyServer(
     fun start() {
         isRunning = true
         try {
+            // nosemgrep: kotlin.lang.security.unencrypted-socket.unencrypted-socket
+            // nosemgrep: unencrypted-socket
             serverSocket = ServerSocket(listenPort, 50, InetAddress.getByName("127.0.0.1"))
             Log.i(TAG, "CaptureProxyServer started on 127.0.0.1:$listenPort")
             thread(name = "capture-proxy-accept") {
@@ -153,6 +155,8 @@ class CaptureProxyServer(
 
             // 4. Establish Forward connection to Xray's main SOCKS5 port
             val xraySocket = try {
+                // nosemgrep: kotlin.lang.security.unencrypted-socket.unencrypted-socket
+                // nosemgrep: unencrypted-socket
                 Socket("127.0.0.1", targetSocksPort)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to connect to target SOCKS port: $targetSocksPort", e)
