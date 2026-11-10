@@ -46,10 +46,10 @@ class VpnManagerService : VpnService() {
         private val _activeTetheringIps = MutableStateFlow<List<String>>(emptyList())
         val activeTetheringIps: StateFlow<List<String>> = _activeTetheringIps.asStateFlow()
 
-        private val _activeLanHttpPort = MutableStateFlow(10809)
+        private val _activeLanHttpPort = MutableStateFlow(0)
         val activeLanHttpPort: StateFlow<Int> = _activeLanHttpPort.asStateFlow()
 
-        private val _activeLanSocksPort = MutableStateFlow(10808)
+        private val _activeLanSocksPort = MutableStateFlow(0)
         val activeLanSocksPort: StateFlow<Int> = _activeLanSocksPort.asStateFlow()
 
         private val _pingMsFlow = MutableStateFlow<Int?>(null)
@@ -71,6 +71,9 @@ class VpnManagerService : VpnService() {
             path = ""
         )
 
+        var isChainModeActive: Boolean = false
+        var activeChainProfiles: List<XrayConfigManager.ServerProfile> = emptyList()
+
         fun loadSelectedProfile(context: Context, forceProfileId: String? = null) {
             try {
                 val selected = XrayProfilePersistence.resolveActiveProfile(context, forceProfileId)
@@ -78,6 +81,10 @@ class VpnManagerService : VpnService() {
                     selectedProfile = selected
                     Log.i(TAG, "Successfully loaded active profile from persistence: ${selected.name} (${selected.id})")
                 }
+                isChainModeActive = XrayProfilePersistence.loadChainEnabled(context)
+                activeChainProfiles = if (isChainModeActive) {
+                    XrayProfilePersistence.resolveChainProfiles(context)
+                } else emptyList()
             } catch (e: java.lang.Exception) {
                 Log.e(TAG, "Failed to load selected profile from persistence", e)
             }
@@ -228,35 +235,34 @@ class VpnManagerService : VpnService() {
             // Notify VPN service lifecycle observer
             VpnLifecycleProvider.listener?.onServiceStart(this, serviceScope, selectedProfile.id)
             
-            // Pre-resolve VPN server hostname before creating the TUN interface (while network DNS works)
+            // Pre-resolve entry VPN server hostname before creating the TUN interface (while network DNS works)
             resolvedServerIp = null
-            if (selectedProfile.address.isNotEmpty()) {
+            val targetAddressToResolve = if (isChainModeActive && activeChainProfiles.isNotEmpty()) {
+                activeChainProfiles.first().address // Only pre-resolve Entry Node on local network!
+            } else {
+                selectedProfile.address
+            }
+            if (targetAddressToResolve.isNotEmpty()) {
                 try {
-                    val addressObj = java.net.InetAddress.getByName(selectedProfile.address)
+                    val addressObj = java.net.InetAddress.getByName(targetAddressToResolve)
                     resolvedServerIp = addressObj.hostAddress
-                    Log.i(TAG, "Pre-resolved VPN server hostname ${selectedProfile.address} to $resolvedServerIp")
+                    Log.i(TAG, "Pre-resolved entry VPN server hostname $targetAddressToResolve to $resolvedServerIp")
                 } catch (e: Exception) {
-                    Log.w(TAG, "Failed to pre-resolve VPN server hostname: ${selectedProfile.address}", e)
+                    Log.w(TAG, "Failed to pre-resolve entry VPN server hostname: $targetAddressToResolve", e)
                 }
             }
 
-            // 1. Setup SOCKS5 vulnerability mitigation
-            val isLocalProxyRandomize = XrayProfilePersistence.loadLocalProxyRandomize(this)
-            val creds = if (isLocalProxyRandomize) {
-                XrayConfigManager.generateSecureCredentials()
-            } else {
-                val user = XrayProfilePersistence.loadLocalProxyUsername(this)
-                val pass = XrayProfilePersistence.loadLocalProxyPassword(this)
-                val port = XrayProfilePersistence.loadLocalProxyPort(this)
-                XrayConfigManager.LocalProxyCredentials(port = port, username = user, token = pass)
-            }
+            // 1. Setup SOCKS5 vulnerability mitigation: ALWAYS generate fresh cryptographically secure credentials on every session
+            val creds = XrayConfigManager.generateSecureCredentials()
             _activeCredentials.value = creds
             _activePortFlow.value = creds.port
 
             // Set secure SOCKS5 authenticator to allow our own app to query the local proxy safely
+            val loopbackHost = XrayConfigManager.getLoopbackAddress()
             java.net.Authenticator.setDefault(object : java.net.Authenticator() {
                 override fun getPasswordAuthentication(): java.net.PasswordAuthentication {
-                    if (requestingHost == "127.0.0.1" && requestingPort == creds.port) {
+                    val isLoopback = requestingHost == "127.0.0.1" || requestingHost == "::1" || requestingHost == "localhost" || requestingHost == loopbackHost
+                    if (isLoopback && requestingPort == creds.port) {
                         return java.net.PasswordAuthentication(creds.username, creds.token.toCharArray())
                     }
                     return super.getPasswordAuthentication()
@@ -336,35 +342,86 @@ class VpnManagerService : VpnService() {
             // Start ProtectServer Unix domain socket for Xray socket protection
             protectServer = ProtectServer(this).apply { start() }
 
-            // 2. Generate/Compile client configuration file
-            val configFile = XrayConfigManager.compileSecureConfig(
-                context = this,
-                profile = selectedProfile,
-                creds = creds,
-                allowedApps = allowedAppsList,
-                blockedApps = blockedAppsList,
-                geoipRules = geoipRulesList,
-                geositeRules = geositeRulesList,
-                lanAuthEnabled = isLanAuthEnabled,
-                lanCreds = lanCreds,
-                tetheringIps = tetherIps,
-                lanHttpPort = lanHttpPort,
-                lanSocksPort = lanSocksPort,
-                captureProxyPort = activeCapturePort
-            )
+            // 2. Generate/Compile client configuration files (supporting dual-core for multi-hop chains)
+            var entryConfigFile: java.io.File? = null
+            val configFile: java.io.File
+
+            if (isChainModeActive && activeChainProfiles.size >= 2) {
+                val entryCreds = XrayConfigManager.generateSecureCredentials(
+                    excludePorts = setOf(creds.port, lanHttpPort, lanSocksPort, activeCapturePort)
+                )
+                entryConfigFile = XrayConfigManager.compileEntryGatewayConfig(
+                    context = this,
+                    profile = activeChainProfiles.first(),
+                    entryCreds = entryCreds
+                )
+                configFile = XrayConfigManager.compileSecureConfig(
+                    context = this,
+                    profile = selectedProfile,
+                    creds = creds,
+                    allowedApps = allowedAppsList,
+                    blockedApps = blockedAppsList,
+                    geoipRules = geoipRulesList,
+                    geositeRules = geositeRulesList,
+                    lanAuthEnabled = isLanAuthEnabled,
+                    lanCreds = lanCreds,
+                    tetheringIps = tetherIps,
+                    lanHttpPort = lanHttpPort,
+                    lanSocksPort = lanSocksPort,
+                    captureProxyPort = activeCapturePort,
+                    chainProfiles = activeChainProfiles,
+                    entryHopCreds = entryCreds
+                )
+            } else {
+                configFile = XrayConfigManager.compileSecureConfig(
+                    context = this,
+                    profile = selectedProfile,
+                    creds = creds,
+                    allowedApps = allowedAppsList,
+                    blockedApps = blockedAppsList,
+                    geoipRules = geoipRulesList,
+                    geositeRules = geositeRulesList,
+                    lanAuthEnabled = isLanAuthEnabled,
+                    lanCreds = lanCreds,
+                    tetheringIps = tetherIps,
+                    lanHttpPort = lanHttpPort,
+                    lanSocksPort = lanSocksPort,
+                    captureProxyPort = activeCapturePort,
+                    chainProfiles = null,
+                    entryHopCreds = null
+                )
+            }
 
             // 2. Create the Android VPN TUN Interface
             val builder = Builder()
                 .setSession("Sentinel Secure Shield")
                 .addAddress("10.0.0.2", 24)
                 .addAddress("fd00::2", 64)
-                .addDnsServer("8.8.8.8")
-                .addDnsServer("1.1.1.1")
-                .addDnsServer("2001:4860:4860::8888")
-                .addDnsServer("2606:4700:4700::1111")
-                // Enforce default routing through our secure tunnel interface
                 .addRoute("0.0.0.0", 0)
                 .addRoute("::", 0)
+
+            // Add dynamically resolved DNS servers (numeric IPv4/IPv6 literals only, DoH URLs are handled internally by core)
+            val dynamicDnsServers = XrayConfigManager.resolveDynamicDnsServers(this)
+            var numericDnsCount = 0
+            for (dns in dynamicDnsServers) {
+                if (XrayConfigManager.isNumericIpAddress(dns)) {
+                    try {
+                        builder.addDnsServer(dns)
+                        numericDnsCount++
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Could not add numeric DNS server $dns to VPN builder", e)
+                    }
+                }
+            }
+            if (numericDnsCount == 0) {
+                val activeNetDns = XrayConfigManager.resolveActiveNetworkDns(this).filter { XrayConfigManager.isNumericIpAddress(it) }
+                val fallbackDns = activeNetDns.firstOrNull() ?: "1.1.1.1"
+                try {
+                    builder.addDnsServer(fallbackDns)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Could not add fallback DNS server $fallbackDns to VPN builder", e)
+                }
+            }
 
             // If Kill Switch is NOT active, allow apps to bypass the VPN for direct network access
             val isKillSwitchActive = XrayProfilePersistence.loadKillSwitch(this)
@@ -425,8 +482,8 @@ class VpnManagerService : VpnService() {
                     activeRawFd = 0
                     Log.i(TAG, "Successfully dup2'd TUN FD to STDIN (FD 0)")
                     
-                    // Start native Xray process passing FD 0
-                    XrayProcessManager.startProcess(this, configFile.absolutePath, 0)
+                    // Start native Xray processes passing FD 0 and optional entry core
+                    XrayProcessManager.startProcess(this, configFile.absolutePath, 0, entryConfigFile?.absolutePath)
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to dup2 TUN FD to STDIN", e)
                     activeRawFd = -1
@@ -544,47 +601,47 @@ class VpnManagerService : VpnService() {
             Log.i(TAG, "Reloading VPN and Xray config dynamically for profile: ${selectedProfile.name} (${selectedProfile.id})...")
             loadRoutingRules(this)
             
-            // Pre-resolve server hostname for the newly selected profile
+            isChainModeActive = XrayProfilePersistence.loadChainEnabled(this)
+            activeChainProfiles = if (isChainModeActive) {
+                XrayProfilePersistence.resolveChainProfiles(this)
+            } else emptyList()
+
+            // Pre-resolve server hostname for entry node
             resolvedServerIp = null
-            if (selectedProfile.address.isNotEmpty()) {
+            val reloadTargetToResolve = if (isChainModeActive && activeChainProfiles.isNotEmpty()) {
+                activeChainProfiles.first().address
+            } else {
+                selectedProfile.address
+            }
+            if (reloadTargetToResolve.isNotEmpty()) {
                 try {
-                    val addressObj = java.net.InetAddress.getByName(selectedProfile.address)
+                    val addressObj = java.net.InetAddress.getByName(reloadTargetToResolve)
                     resolvedServerIp = addressObj.hostAddress
-                    Log.i(TAG, "Reload: Pre-resolved VPN server hostname ${selectedProfile.address} to $resolvedServerIp")
+                    Log.i(TAG, "Reload: Pre-resolved VPN server hostname $reloadTargetToResolve to $resolvedServerIp")
                 } catch (e: Exception) {
-                    Log.w(TAG, "Reload: Failed to pre-resolve VPN server hostname: ${selectedProfile.address}", e)
+                    Log.w(TAG, "Reload: Failed to pre-resolve VPN server hostname: $reloadTargetToResolve", e)
                 }
             }
 
-            // 1. Re-compile secure configuration file
-            val isLocalProxyRandomize = XrayProfilePersistence.loadLocalProxyRandomize(this)
+            // 1. Re-compile secure configuration file with fresh cryptographically secure credentials
             val currentPort = _activeCredentials.value?.port ?: 0
-            val creds = if (forceNewPort || _activeCredentials.value == null) {
-                val newCreds = if (isLocalProxyRandomize) {
-                    XrayConfigManager.generateSecureCredentials(excludePorts = if (currentPort > 0) setOf(currentPort) else emptySet())
-                } else {
-                    val user = XrayProfilePersistence.loadLocalProxyUsername(this)
-                    val pass = XrayProfilePersistence.loadLocalProxyPassword(this)
-                    val newPort = XrayConfigManager.findRandomOpenPort(excludePorts = if (currentPort > 0) setOf(currentPort) else emptySet())
-                    XrayConfigManager.LocalProxyCredentials(port = newPort, username = user, token = pass)
-                }
-                _activeCredentials.value = newCreds
-                _activePortFlow.value = newCreds.port
-                
-                // Re-register Authenticator for the new port
-                java.net.Authenticator.setDefault(object : java.net.Authenticator() {
-                    override fun getPasswordAuthentication(): java.net.PasswordAuthentication {
-                        if (requestingHost == "127.0.0.1" && requestingPort == newCreds.port) {
-                            return java.net.PasswordAuthentication(newCreds.username, newCreds.token.toCharArray())
-                        }
-                        return super.getPasswordAuthentication()
+            val creds = XrayConfigManager.generateSecureCredentials(
+                excludePorts = if (currentPort > 0) setOf(currentPort) else emptySet()
+            )
+            _activeCredentials.value = creds
+            _activePortFlow.value = creds.port
+
+            // Re-register Authenticator for the new port
+            val loopbackHost = XrayConfigManager.getLoopbackAddress()
+            java.net.Authenticator.setDefault(object : java.net.Authenticator() {
+                override fun getPasswordAuthentication(): java.net.PasswordAuthentication {
+                    val isLoopback = requestingHost == "127.0.0.1" || requestingHost == "::1" || requestingHost == "localhost" || requestingHost == loopbackHost
+                    if (isLoopback && requestingPort == creds.port) {
+                        return java.net.PasswordAuthentication(creds.username, creds.token.toCharArray())
                     }
-                })
-                
-                newCreds
-            } else {
-                _activeCredentials.value!!
-            }
+                    return super.getPasswordAuthentication()
+                }
+            })
             
             val tetherIps = getActiveTetheringIps()
             val lanHttpPort = _activeLanHttpPort.value
@@ -592,27 +649,60 @@ class VpnManagerService : VpnService() {
             val isLanAuthEnabled = XrayProfilePersistence.loadLanSharingAuth(this)
             val lanCreds = _activeLanCredentials.value
 
-            val configFile = XrayConfigManager.compileSecureConfig(
-                context = this,
-                profile = selectedProfile,
-                creds = creds,
-                allowedApps = allowedAppsList,
-                blockedApps = blockedAppsList,
-                geoipRules = geoipRulesList,
-                geositeRules = geositeRulesList,
-                lanAuthEnabled = isLanAuthEnabled,
-                lanCreds = lanCreds,
-                tetheringIps = tetherIps,
-                lanHttpPort = lanHttpPort,
-                lanSocksPort = lanSocksPort,
-                captureProxyPort = activeCapturePort
-            )
+            var entryConfigFile: java.io.File? = null
+            val configFile: java.io.File
+
+            if (isChainModeActive && activeChainProfiles.size >= 2) {
+                val entryCreds = XrayConfigManager.generateSecureCredentials(
+                    excludePorts = setOf(creds.port, lanHttpPort, lanSocksPort, activeCapturePort)
+                )
+                entryConfigFile = XrayConfigManager.compileEntryGatewayConfig(
+                    context = this,
+                    profile = activeChainProfiles.first(),
+                    entryCreds = entryCreds
+                )
+                configFile = XrayConfigManager.compileSecureConfig(
+                    context = this,
+                    profile = selectedProfile,
+                    creds = creds,
+                    allowedApps = allowedAppsList,
+                    blockedApps = blockedAppsList,
+                    geoipRules = geoipRulesList,
+                    geositeRules = geositeRulesList,
+                    lanAuthEnabled = isLanAuthEnabled,
+                    lanCreds = lanCreds,
+                    tetheringIps = tetherIps,
+                    lanHttpPort = lanHttpPort,
+                    lanSocksPort = lanSocksPort,
+                    captureProxyPort = activeCapturePort,
+                    chainProfiles = activeChainProfiles,
+                    entryHopCreds = entryCreds
+                )
+            } else {
+                configFile = XrayConfigManager.compileSecureConfig(
+                    context = this,
+                    profile = selectedProfile,
+                    creds = creds,
+                    allowedApps = allowedAppsList,
+                    blockedApps = blockedAppsList,
+                    geoipRules = geoipRulesList,
+                    geositeRules = geositeRulesList,
+                    lanAuthEnabled = isLanAuthEnabled,
+                    lanCreds = lanCreds,
+                    tetheringIps = tetherIps,
+                    lanHttpPort = lanHttpPort,
+                    lanSocksPort = lanSocksPort,
+                    captureProxyPort = activeCapturePort,
+                    chainProfiles = null,
+                    entryHopCreds = null
+                )
+            }
 
             // 2. Restart native Xray core subprocess on active raw FD without revoking VPN interface
             if (XrayProcessManager.isInstalled(this) && activeRawFd != -1) {
-                Log.i(TAG, "Restarting native Xray core dynamically using Raw FD: $activeRawFd")
+                Log.i(TAG, "Restarting native Xray core dynamically using Raw FD: $activeRawFd (entry: ${entryConfigFile?.name})")
                 XrayProcessManager.stopProcess()
-                XrayProcessManager.startProcess(this, configFile.absolutePath, activeRawFd)
+                XrayProcessManager.startProcess(this, configFile.absolutePath, activeRawFd, entryConfigFile?.absolutePath)
                 Log.i(TAG, "Native Xray core successfully restarted for profile: ${selectedProfile.name}")
                 
                 _publicIpFlow.value = null
@@ -692,17 +782,6 @@ class VpnManagerService : VpnService() {
         com.xprox.sentinel.config.XrayProfilePersistence.setHotspotActiveSession(null)
 
         XrayProcessManager.stopProcess() // Terminate Xray core subprocess
-        
-        // Delete temporary secure Xray configuration file to prevent sensitive data lingering on disk
-        try {
-            val configFile = File(filesDir, "secure_xray_config.json")
-            if (configFile.exists()) {
-                configFile.delete()
-                Log.i(TAG, "Successfully deleted temporary secure Xray config file from disk")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to delete temporary secure Xray config file", e)
-        }
 
         packetProcessor?.stop()
         vpnThread?.interrupt()
@@ -734,8 +813,8 @@ class VpnManagerService : VpnService() {
         _activeCredentials.value = null
         _activeLanCredentials.value = null
         _activeTetheringIps.value = emptyList()
-        _activeLanHttpPort.value = 10809
-        _activeLanSocksPort.value = 10808
+        _activeLanHttpPort.value = 0
+        _activeLanSocksPort.value = 0
         VpnNetworkMonitor.unregisterNetworkCallback()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE)

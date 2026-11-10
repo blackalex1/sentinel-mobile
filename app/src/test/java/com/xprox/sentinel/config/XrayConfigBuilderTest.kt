@@ -69,7 +69,7 @@ class XrayConfigBuilderTest {
         )
 
         val spec = ConfigSpec(
-            targetCore = "singbox",
+            targetCore = "xray",
             serverNode = profile.toCoreProfile(),
             clientInbound = ClientInboundSpec(
                 mode = "mobile_vpn",
@@ -79,9 +79,9 @@ class XrayConfigBuilderTest {
 
         val res = SentinelCore.buildConfig(spec)
         assertNotNull(res)
-        assertEquals("singbox", res.targetCore)
+        assertEquals("xray", res.targetCore)
         assertTrue(res.configJson.isNotEmpty())
-        assertTrue(res.configJson.contains("hysteria2"))
+        assertTrue(res.configJson.contains("hysteria"))
         assertTrue(res.configJson.contains("hy2.server.com"))
     }
 

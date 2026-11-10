@@ -39,6 +39,8 @@ import com.xprox.sentinel.data.LanguageManager
 import com.xprox.sentinel.data.string
 import com.xprox.sentinel.MainActivity
 import com.xprox.sentinel.ui.screens.dashboard.*
+import com.xprox.sentinel.ui.components.chain.VpnChainCard
+import com.xprox.sentinel.ui.components.chain.ChainServerPickerDialog
 
 @Composable
 fun DashboardScreen(onNavigateToSettings: () -> Unit = {}) {
@@ -58,6 +60,10 @@ fun DashboardScreen(onNavigateToSettings: () -> Unit = {}) {
     val publicIp by VpnManagerService.publicIpFlow.collectAsState()
     val connectionSpeed by VpnManagerService.speedFlow.collectAsState()
     val isRu = LanguageManager.currentLanguage.collectAsState().value.code == "ru"
+    var isChainEnabled by remember { mutableStateOf(false) }
+    var chainProfiles by remember { mutableStateOf<List<XrayConfigManager.ServerProfile>>(emptyList()) }
+    var showChainServerPicker by remember { mutableStateOf(false) }
+    var chainPickingIndex by remember { mutableStateOf<Int?>(null) }
     var showDownloadDialog by remember { mutableStateOf(false) }
     var showDisconnectConfirmDialog by remember { mutableStateOf(false) }
     val triggerDisconnectConfirm by MainActivity.showDisconnectConfirmFlow.collectAsState()
@@ -76,6 +82,8 @@ fun DashboardScreen(onNavigateToSettings: () -> Unit = {}) {
         XrayProfilePersistence.updatesFlow.collect {
             val loadedProfiles = XrayProfilePersistence.loadProfiles(context)
             profiles = loadedProfiles
+            isChainEnabled = XrayProfilePersistence.loadChainEnabled(context)
+            chainProfiles = XrayProfilePersistence.resolveChainProfiles(context)
             
             val selected = XrayProfilePersistence.resolveActiveProfile(context)
             if (selected != null) {
@@ -107,6 +115,8 @@ fun DashboardScreen(onNavigateToSettings: () -> Unit = {}) {
             if (event == Lifecycle.Event.ON_RESUME) {
                 val loadedProfiles = XrayProfilePersistence.loadProfiles(context)
                 profiles = loadedProfiles
+                isChainEnabled = XrayProfilePersistence.loadChainEnabled(context)
+                chainProfiles = XrayProfilePersistence.resolveChainProfiles(context)
                 
                 val selected = XrayProfilePersistence.resolveActiveProfile(context)
                 if (selected != null) {
@@ -340,8 +350,122 @@ fun DashboardScreen(onNavigateToSettings: () -> Unit = {}) {
             }
         )
 
+        val subNamesMap = remember(profiles) { emptyMap<String, String>() }
+
+        if (showChainServerPicker) {
+            ChainServerPickerDialog(
+                title = if (chainPickingIndex == null) "ДОБАВИТЬ УЗЕЛ В ЦЕПОЧКУ" else "СМЕНИТЬ УЗЕЛ ${(chainPickingIndex ?: 0) + 1}",
+                profiles = profiles,
+                subscriptionNames = subNamesMap,
+                onDismiss = { showChainServerPicker = false },
+                onSelectProfile = { selected ->
+                    val list = chainProfiles.toMutableList()
+                    val idx = chainPickingIndex
+                    if (idx != null && idx in list.indices) {
+                        list[idx] = selected
+                    } else {
+                        list.add(selected)
+                    }
+                    chainProfiles = list
+                    XrayProfilePersistence.saveChainProfileIds(context, list.map { it.id })
+                    showChainServerPicker = false
+
+                    if (isRunning && isChainEnabled) {
+                        val reloadIntent = android.content.Intent(context, VpnManagerService::class.java).apply {
+                            action = VpnManagerService.ACTION_RELOAD_CONFIG
+                        }
+                        context.startService(reloadIntent)
+                    }
+                }
+            )
+        }
+
         // Display Active Profile Warning/Info
-        ActiveProfileBox(activeProfile = activeProfile, isRunning = isRunning)
+        ActiveProfileBox(
+            activeProfile = activeProfile,
+            isRunning = isRunning,
+            isChainActive = isChainEnabled,
+            chainProfiles = chainProfiles
+        )
+
+        // VPN Chaining / Multi-hop Module Card
+        VpnChainCard(
+            isChainEnabled = isChainEnabled,
+            chainProfiles = chainProfiles,
+            subscriptionNames = subNamesMap,
+            onToggleChain = { enabled ->
+                isChainEnabled = enabled
+                XrayProfilePersistence.saveChainEnabled(context, enabled)
+                if (enabled && chainProfiles.size < 2) {
+                    val validProxies = profiles.filter { it.type.uppercase() != "DIRECT" && it.address.isNotEmpty() }
+                    if (validProxies.size >= 2) {
+                        val initial = listOf(validProxies[0], validProxies[1])
+                        chainProfiles = initial
+                        XrayProfilePersistence.saveChainProfileIds(context, initial.map { it.id })
+                    }
+                }
+                if (isRunning) {
+                    val reloadIntent = android.content.Intent(context, VpnManagerService::class.java).apply {
+                        action = VpnManagerService.ACTION_RELOAD_CONFIG
+                    }
+                    context.startService(reloadIntent)
+                }
+            },
+            onAddNodeClick = {
+                chainPickingIndex = null
+                showChainServerPicker = true
+            },
+            onChangeNodeClick = { idx ->
+                chainPickingIndex = idx
+                showChainServerPicker = true
+            },
+            onMoveUp = { idx ->
+                if (idx > 0 && idx < chainProfiles.size) {
+                    val list = chainProfiles.toMutableList()
+                    val temp = list[idx]
+                    list[idx] = list[idx - 1]
+                    list[idx - 1] = temp
+                    chainProfiles = list
+                    XrayProfilePersistence.saveChainProfileIds(context, list.map { it.id })
+                    if (isRunning && isChainEnabled) {
+                        val reloadIntent = android.content.Intent(context, VpnManagerService::class.java).apply {
+                            action = VpnManagerService.ACTION_RELOAD_CONFIG
+                        }
+                        context.startService(reloadIntent)
+                    }
+                }
+            },
+            onMoveDown = { idx ->
+                if (idx >= 0 && idx < chainProfiles.size - 1) {
+                    val list = chainProfiles.toMutableList()
+                    val temp = list[idx]
+                    list[idx] = list[idx + 1]
+                    list[idx + 1] = temp
+                    chainProfiles = list
+                    XrayProfilePersistence.saveChainProfileIds(context, list.map { it.id })
+                    if (isRunning && isChainEnabled) {
+                        val reloadIntent = android.content.Intent(context, VpnManagerService::class.java).apply {
+                            action = VpnManagerService.ACTION_RELOAD_CONFIG
+                        }
+                        context.startService(reloadIntent)
+                    }
+                }
+            },
+            onDeleteNode = { idx ->
+                if (chainProfiles.size > 2 && idx in chainProfiles.indices) {
+                    val list = chainProfiles.toMutableList()
+                    list.removeAt(idx)
+                    chainProfiles = list
+                    XrayProfilePersistence.saveChainProfileIds(context, list.map { it.id })
+                    if (isRunning && isChainEnabled) {
+                        val reloadIntent = android.content.Intent(context, VpnManagerService::class.java).apply {
+                            action = VpnManagerService.ACTION_RELOAD_CONFIG
+                        }
+                        context.startService(reloadIntent)
+                    }
+                }
+            }
+        )
 
         // Connection Profiles Section
         Column(modifier = Modifier.fillMaxWidth()) {

@@ -12,7 +12,8 @@ object VpnProcessSupervisor {
     fun startOrRestartCoreProcess(
         context: Context,
         configFile: File,
-        activeRawFd: Int
+        activeRawFd: Int,
+        entryConfigFile: File? = null
     ): Boolean {
         if (!XrayProcessManager.isInstalled(context)) {
             Log.e(TAG, "Xray binary is not installed")
@@ -29,8 +30,8 @@ object VpnProcessSupervisor {
 
         try {
             XrayProcessManager.stopProcess()
-            XrayProcessManager.startProcess(context, configFile.absolutePath, activeRawFd)
-            Log.i(TAG, "Native process started successfully with config: ${configFile.name}")
+            XrayProcessManager.startProcess(context, configFile.absolutePath, activeRawFd, entryConfigFile?.absolutePath)
+            Log.i(TAG, "Native process started successfully with config: ${configFile.name} (entry: ${entryConfigFile?.name})")
             return true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start native process", e)

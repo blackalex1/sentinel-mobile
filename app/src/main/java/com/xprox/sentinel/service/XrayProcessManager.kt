@@ -17,6 +17,9 @@ object XrayProcessManager {
 
     @Volatile
     private var xrayProcess: Process? = null
+
+    @Volatile
+    private var entryProcess: Process? = null
     
     @Volatile
     var lastStartTime: Long = 0L
@@ -38,13 +41,32 @@ object XrayProcessManager {
     val xrayLogFlow: SharedFlow<String> = _xrayLogFlow.asSharedFlow()
 
     /**
+     * Checks if any native Xray core subprocess is currently active and alive.
+     */
+    fun isProcessRunning(): Boolean {
+        return (xrayProcess?.isAlive == true) || (entryProcess?.isAlive == true)
+    }
+
+    fun isMainProcessRunning(): Boolean = xrayProcess?.isAlive == true
+    fun isEntryProcessRunning(): Boolean = entryProcess?.isAlive == true
+
+    /**
      * Terminate any lingering native xray binary subprocesses under our app's UID SYNCHRONOUSLY
      * before a new process is created, preventing race conditions.
      */
     fun killExistingXrayProcessesSync() {
-        val p = xrayProcess
+        val pMain = xrayProcess
+        val pEntry = entryProcess
         xrayProcess = null
-        p?.let {
+        entryProcess = null
+
+        pMain?.let {
+            try {
+                it.destroyForcibly()
+                it.waitFor()
+            } catch (e: Exception) {}
+        }
+        pEntry?.let {
             try {
                 it.destroyForcibly()
                 it.waitFor()
@@ -70,10 +92,18 @@ object XrayProcessManager {
     }
 
     /**
-     * Launches Xray-core as an isolated native subprocess bound to our secure configuration.
+     * Launches Xray-core as isolated native subprocesses bound to our secure configuration.
+     * Supports dual-instance architecture:
+     * - Optional [entryConfigFilePath]: Entry Subprocess (e.g. subscription balancer gateway)
+     * - [configFilePath]: Main VPN Subprocess (TUN interface and Exit node)
      */
     @Synchronized
-    fun startProcess(context: Context, configFilePath: String, tunFd: Int? = null): Boolean {
+    fun startProcess(
+        context: Context,
+        configFilePath: String,
+        tunFd: Int? = null,
+        entryConfigFilePath: String? = null
+    ): Boolean {
         // Clean up lingering processes SYNCHRONOUSLY first before spawning the new process
         killExistingXrayProcessesSync()
 
@@ -89,10 +119,61 @@ object XrayProcessManager {
             return false
         }
 
+        val logFile = File(context.filesDir, "xray.log")
         try {
-            Log.i(TAG, "Launching native Xray process with config: $configFilePath")
-            
-            // Build the process strictly within the app files sandbox directory
+            if (logFile.exists()) {
+                logFile.delete()
+            }
+            logFile.createNewFile()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to reset xray.log", e)
+        }
+
+        val protectPath = File(context.filesDir, ProtectServer.PROTECT_SOCKET_NAME).absolutePath
+
+        try {
+            // 1. If entryConfigFilePath is provided, launch Entry Core Subprocess (Hop 1 / Subscription Balancer)
+            if (!entryConfigFilePath.isNullOrEmpty()) {
+                Log.i(TAG, "Launching native Xray Entry subprocess with config: $entryConfigFilePath")
+                val entryBuilder = ProcessBuilder(xrayFile.absolutePath, "-config", entryConfigFilePath)
+                    .directory(binDir)
+                    .redirectErrorStream(true)
+
+                entryBuilder.environment()["assets"] = binDir.absolutePath
+                entryBuilder.environment()["xray.location.asset"] = binDir.absolutePath
+                entryBuilder.environment()["v2ray.protect.path"] = protectPath
+                entryBuilder.environment()["xray.protect.path"] = protectPath
+                entryBuilder.environment()["V2RAY_PROTECT_PATH"] = protectPath
+                entryBuilder.environment()["XRAY_PROTECT_PATH"] = protectPath
+
+                val entryProc = entryBuilder.start()
+                entryProcess = entryProc
+
+                // Monitor Entry process log outputs on a background thread
+                Thread {
+                    try {
+                        val reader = entryProc.inputStream.bufferedReader()
+                        reader.forEachLine { line ->
+                            val tagged = "[EntryCore] $line"
+                            Log.d("XrayEntryProcess", tagged)
+                            try {
+                                logFile.appendText(tagged + "\n")
+                            } catch (e: Exception) {}
+                            _xrayLogFlow.tryEmit(tagged)
+                        }
+                    } catch (e: Exception) {
+                        if (e !is java.io.IOException) {
+                            Log.e(TAG, "Error in entry process monitor thread", e)
+                        }
+                    }
+                }.start()
+
+                // Allow entry core to bind its local socket before main core starts dialing
+                Thread.sleep(150)
+            }
+
+            // 2. Launch Main VPN Xray Subprocess
+            Log.i(TAG, "Launching native Xray Main process with config: $configFilePath")
             val builder = ProcessBuilder(xrayFile.absolutePath, "-config", configFilePath)
                 .directory(binDir)
                 .redirectErrorStream(true)
@@ -102,7 +183,6 @@ object XrayProcessManager {
             builder.environment()["xray.location.asset"] = binDir.absolutePath
 
             // Inject Unix domain socket path for outbound socket protection via VpnService.protect()
-            val protectPath = File(context.filesDir, ProtectServer.PROTECT_SOCKET_NAME).absolutePath
             builder.environment()["v2ray.protect.path"] = protectPath
             builder.environment()["xray.protect.path"] = protectPath
             builder.environment()["V2RAY_PROTECT_PATH"] = protectPath
@@ -117,16 +197,6 @@ object XrayProcessManager {
                 }
             }
 
-            val logFile = File(context.filesDir, "xray.log")
-            try {
-                if (logFile.exists()) {
-                    logFile.delete()
-                }
-                logFile.createNewFile()
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to reset xray.log", e)
-            }
-
             val proc = builder.start()
             xrayProcess = proc
 
@@ -135,7 +205,8 @@ object XrayProcessManager {
                 try {
                     val reader = proc.inputStream.bufferedReader()
                     reader.forEachLine { line ->
-                        Log.d("XrayCoreProcess", line)
+                        val tagged = "[MainCore] $line"
+                        Log.d("XrayCoreProcess", tagged)
                         if (line.contains("bind: address already in use") || line.contains("failed to listen TCP")) {
                             Log.w(TAG, "Detected Xray port binding failure in log output: $line")
                             lastPortBindFailed = true
@@ -145,17 +216,17 @@ object XrayProcessManager {
                         
                         // Append to xray.log
                         try {
-                            logFile.appendText(line + "\n")
+                            logFile.appendText(tagged + "\n")
                         } catch (e: Exception) {
                             // ignore
                         }
 
                         // Emit line to flow
-                        _xrayLogFlow.tryEmit(line)
+                        _xrayLogFlow.tryEmit(tagged)
                     }
                     val exitVal = proc.waitFor()
                     val runDuration = System.currentTimeMillis() - startTime
-                    Log.i(TAG, "Xray process exited with code $exitVal (duration: ${runDuration}ms)")
+                    Log.i(TAG, "Main Xray process exited with code $exitVal (duration: ${runDuration}ms)")
                     
                     synchronized(XrayProcessManager) {
                         if (xrayProcess != null && xrayProcess == proc) {
@@ -197,36 +268,40 @@ object XrayProcessManager {
                 }
             }.start()
 
-            Log.i(TAG, "Xray-core native subprocess successfully executed")
+            Log.i(TAG, "Xray-core native subprocesses successfully executed")
             return true
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to launch Xray-core subprocess", e)
+            Log.e(TAG, "Failed to launch Xray-core subprocesses", e)
         }
         return false
     }
 
     /**
-     * Terminate the running Xray subprocess asynchronously off the main UI thread.
-     * Target strictly the tracked process instance so it never kills newly starting processes.
+     * Terminate all running Xray subprocesses asynchronously off the main UI thread.
      */
     fun stopProcess() {
         consecutiveFailures = 0
-        val p = synchronized(this) {
-            val proc = xrayProcess
+        val (pMain, pEntry) = synchronized(this) {
+            val procM = xrayProcess
+            val procE = entryProcess
             xrayProcess = null
-            proc
+            entryProcess = null
+            Pair(procM, procE)
         }
 
-        if (p == null) return
+        if (pMain == null && pEntry == null) return
 
         Thread {
             try {
-                Log.i(TAG, "Terminating running Xray native subprocess instance asynchronously")
-                p.destroyForcibly()
+                Log.i(TAG, "Terminating running Xray native subprocess instances asynchronously")
+                pMain?.destroyForcibly()
+                pEntry?.destroyForcibly()
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    p.waitFor(300, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    pMain?.waitFor(300, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    pEntry?.waitFor(300, java.util.concurrent.TimeUnit.MILLISECONDS)
                 } else {
-                    p.waitFor()
+                    pMain?.waitFor()
+                    pEntry?.waitFor()
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error waiting for process to terminate", e)

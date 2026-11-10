@@ -734,6 +734,56 @@ object XrayProfilePersistence {
             Log.e(TAG, "Error removing paired device", e)
         }
     }
+
+    private const val KEY_CHAIN_ENABLED = "xray_chain_enabled"
+    private const val KEY_CHAIN_PROFILE_IDS = "xray_chain_profile_ids"
+
+    fun loadChainEnabled(context: Context): Boolean {
+        val prefs = getEncryptedPrefs(context)
+        return prefs.getBoolean(KEY_CHAIN_ENABLED, false)
+    }
+
+    fun saveChainEnabled(context: Context, enabled: Boolean) {
+        val prefs = getEncryptedPrefs(context)
+        prefs.edit().putBoolean(KEY_CHAIN_ENABLED, enabled).apply()
+        notifyUpdate()
+    }
+
+    fun loadChainProfileIds(context: Context): List<String> {
+        val prefs = getEncryptedPrefs(context)
+        val jsonStr = prefs.getString(KEY_CHAIN_PROFILE_IDS, null) ?: return emptyList()
+        return try {
+            val array = org.json.JSONArray(jsonStr)
+            val list = mutableListOf<String>()
+            for (i in 0 until array.length()) {
+                val id = array.optString(i, "")
+                if (id.isNotEmpty()) {
+                    list.add(id)
+                }
+            }
+            list
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveChainProfileIds(context: Context, ids: List<String>) {
+        val prefs = getEncryptedPrefs(context)
+        val array = org.json.JSONArray()
+        ids.forEach { array.put(it) }
+        prefs.edit().putString(KEY_CHAIN_PROFILE_IDS, array.toString()).apply()
+        notifyUpdate()
+    }
+
+    fun resolveChainProfiles(context: Context): List<XrayConfigManager.ServerProfile> {
+        val ids = loadChainProfileIds(context)
+        if (ids.size < 2) return emptyList()
+        val allProfiles = loadProfiles(context)
+        val profileMap = allProfiles.associateBy { it.id }
+        val resolved = ids.mapNotNull { profileMap[it] }
+        return if (resolved.size >= 2) resolved else emptyList()
+    }
 }
+
 
 

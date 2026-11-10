@@ -32,11 +32,14 @@ import com.xprox.sentinel.ui.components.DoppelrandCard
 fun ActiveProfileBox(
     activeProfile: XrayConfigManager.ServerProfile,
     isRunning: Boolean = false,
+    isChainActive: Boolean = false,
+    chainProfiles: List<XrayConfigManager.ServerProfile> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     var isConfirmed by remember(isRunning) { mutableStateOf(XrayProfilePersistence.loadAnalyticsConfirmed(context)) }
-    val isDirect = activeProfile.type.uppercase() == "DIRECT"
+    val hasMultiHop = isChainActive && chainProfiles.size >= 2
+    val isDirect = !hasMultiHop && activeProfile.type.uppercase() == "DIRECT"
 
     if (!isDirect && (activeProfile.address.isEmpty() || activeProfile.uuid.isEmpty())) {
         DoppelrandCard(
@@ -105,7 +108,7 @@ fun ActiveProfileBox(
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = activeProfile.name,
+                                    text = if (hasMultiHop) "${chainProfiles.first().name} ➔ ${chainProfiles.last().name}" else activeProfile.name,
                                     fontSize = 13.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = TextWhite,
@@ -114,13 +117,15 @@ fun ActiveProfileBox(
                             }
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = if (isDirect) {
+                                text = if (hasMultiHop) {
+                                    "Цепочка (${chainProfiles.size} узла): Вход ${chainProfiles.first().address} • Выход ${chainProfiles.last().address}"
+                                } else if (isDirect) {
                                     if (LanguageManager.currentLanguage.value.code == "ru") "Прямое подключение (Аудит)" else "Direct connection (Audit mode)"
                                 } else {
                                     activeProfile.address
                                 },
                                 fontSize = 11.sp,
-                                color = TextGray,
+                                color = if (hasMultiHop) ElectricViolet else TextGray,
                                 fontFamily = FontFamily.Monospace,
                                 maxLines = 1
                             )
@@ -129,16 +134,16 @@ fun ActiveProfileBox(
 
                     // Protocol Badge Pill
                     Surface(
-                        color = (if (isRunning) SecureGreen else CyberCyan).copy(alpha = 0.12f),
+                        color = (if (hasMultiHop) ElectricViolet else if (isRunning) SecureGreen else CyberCyan).copy(alpha = 0.12f),
                         shape = RoundedCornerShape(6.dp),
-                        border = BorderStroke(1.dp, (if (isRunning) SecureGreen else CyberCyan).copy(alpha = 0.4f)),
+                        border = BorderStroke(1.dp, (if (hasMultiHop) ElectricViolet else if (isRunning) SecureGreen else CyberCyan).copy(alpha = 0.4f)),
                         modifier = Modifier.padding(start = 8.dp)
                     ) {
                         Text(
-                            text = if (isDirect) "DIRECT" else activeProfile.type.uppercase(),
+                            text = if (hasMultiHop) "MULTI-HOP" else if (isDirect) "DIRECT" else activeProfile.type.uppercase(),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = if (isRunning) SecureGreen else CyberCyan,
+                            color = if (hasMultiHop) ElectricViolet else if (isRunning) SecureGreen else CyberCyan,
                             fontFamily = FontFamily.Monospace,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )

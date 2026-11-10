@@ -18,6 +18,7 @@ data class ConfigSpec(
     @SerialName("coreVersion") val coreVersion: String? = null,
     @SerialName("strictMode") val strictMode: Boolean = false,
     @SerialName("serverNode") val serverNode: CoreServerProfile? = null,
+    @SerialName("chainNodes") val chainNodes: List<CoreServerProfile>? = null,
     @SerialName("clientInbound") val clientInbound: ClientInboundSpec? = null,
     @SerialName("serverInbounds") val serverInbounds: List<ServerInboundSpec>? = null,
     @SerialName("routing") val routing: RoutingSpec? = null,

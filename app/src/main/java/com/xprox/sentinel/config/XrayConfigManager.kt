@@ -26,6 +26,8 @@ object XrayConfigManager {
         val port: Int,
         val type: String = "VLESS", // VLESS, VMess, Shadowsocks, Trojan, Hysteria2, Socks, Direct
         val uuid: String = "",
+        val username: String = "",
+        val password: String = "",
         val path: String = "",
         val security: String = "none",
         val sni: String = "",
@@ -52,6 +54,71 @@ object XrayConfigManager {
         val token: String
     )
 
+    fun getLoopbackAddress(): String {
+        return try {
+            java.net.InetAddress.getLoopbackAddress().hostAddress ?: "127.0.0.1"
+        } catch (e: Exception) {
+            "127.0.0.1"
+        }
+    }
+
+    /**
+     * Resolves dynamic DNS servers from user preferences or directly from the active network interface.
+     */
+    fun resolveDynamicDnsServers(context: Context): List<String> {
+        val userDns = XrayProfilePersistence.loadDnsServers(context)
+        if (userDns.isNotEmpty()) return userDns
+
+        return resolveActiveNetworkDns(context)
+    }
+
+    /**
+     * Queries DNS server addresses directly from the active network interface via LinkProperties.
+     */
+    fun resolveActiveNetworkDns(context: Context): List<String> {
+        try {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+            val activeNet = cm?.activeNetwork
+            if (activeNet != null) {
+                val lp = cm.getLinkProperties(activeNet)
+                val servers = lp?.dnsServers?.mapNotNull { it.hostAddress }?.filter { it.isNotBlank() }
+                if (!servers.isNullOrEmpty()) {
+                    return servers
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Dynamic DNS query from active network failed: ${e.message}")
+        }
+        return emptyList()
+    }
+
+    /**
+     * Checks whether a given string is a valid numeric IPv4 or IPv6 address literal
+     * without performing any blocking network lookups.
+     */
+    fun isNumericIpAddress(address: String): Boolean {
+        if (address.isBlank() || address.startsWith("http://", ignoreCase = true) || address.startsWith("https://", ignoreCase = true)) {
+            return false
+        }
+        val clean = address.trim()
+        val ipv4Parts = clean.split('.')
+        if (ipv4Parts.size == 4) {
+            return ipv4Parts.all { part ->
+                val num = part.toIntOrNull()
+                num != null && num in 0..255 && (part == "0" || !part.startsWith("0"))
+            }
+        }
+        if (clean.contains(':')) {
+            return try {
+                val addr = java.net.InetAddress.getByName(clean)
+                addr is java.net.Inet6Address && (addr.hostAddress == clean || clean.startsWith("["))
+            } catch (_: Exception) {
+                false
+            }
+        }
+        return false
+    }
+
     /**
      * Finds a random open port for our local inbound socket proxy.
      */
@@ -60,7 +127,7 @@ object XrayConfigManager {
             try {
                 val socket = java.net.ServerSocket()
                 socket.reuseAddress = true
-                socket.bind(java.net.InetSocketAddress("127.0.0.1", 0))
+                socket.bind(java.net.InetSocketAddress(getLoopbackAddress(), 0))
                 val port = socket.localPort
                 socket.close()
                 if (port > 0 && !excludePorts.contains(port)) {
@@ -132,13 +199,29 @@ object XrayConfigManager {
         lanAuthEnabled: Boolean = false,
         lanCreds: LocalProxyCredentials? = null,
         tetheringIps: List<String> = emptyList(),
-        lanHttpPort: Int = 10809,
-        lanSocksPort: Int = 10808,
-        captureProxyPort: Int = 0
+        lanHttpPort: Int = 0,
+        lanSocksPort: Int = 0,
+        captureProxyPort: Int = 0,
+        chainProfiles: List<ServerProfile>? = null,
+        entryHopCreds: LocalProxyCredentials? = null
     ): ConfigSpec {
-        // 1. Resolve target core
-        val isHysteria = profile.type.equals("HYSTERIA2", ignoreCase = true) || profile.type.equals("HY2", ignoreCase = true)
-        val targetCore = if (isHysteria) "singbox" else "xray"
+        // 1. Resolve target core and multi-hop structure
+        val isChain = !chainProfiles.isNullOrEmpty() && chainProfiles.size >= 2
+        val effectiveChain = if (isChain && entryHopCreds != null) {
+            val entryHopProfile = ServerProfile(
+                id = "chain_entry_gateway",
+                name = "entry-gateway",
+                type = "SOCKS",
+                address = getLoopbackAddress(),
+                port = entryHopCreds.port,
+                username = entryHopCreds.username,
+                password = entryHopCreds.token
+            )
+            listOf(entryHopProfile) + chainProfiles.drop(1)
+        } else chainProfiles
+
+        val activeTargetProfile = if (isChain) effectiveChain!!.last() else profile
+        val targetCore = "xray"
 
         val isLanSharingEnabled = XrayProfilePersistence.loadLanSharing(context)
         val isLanHttp = XrayProfilePersistence.loadLanSharingHttp(context)
@@ -297,10 +380,10 @@ object XrayConfigManager {
             }
         }
 
-        val dnsServers = XrayProfilePersistence.loadDnsServers(context)
+        val dnsServers = resolveDynamicDnsServers(context)
         val dnsSpec = DNSSpec(
-            servers = dnsServers.ifEmpty { listOf("https://dns.google/dns-query", "8.8.8.8") },
-            finalServer = dnsServers.firstOrNull() ?: "8.8.8.8",
+            servers = dnsServers.ifEmpty { listOf("https://1.1.1.1/dns-query") },
+            finalServer = dnsServers.firstOrNull() ?: "1.1.1.1",
             strategy = "prefer_ipv4"
         )
 
@@ -313,13 +396,14 @@ object XrayConfigManager {
 
         return ConfigSpec(
             targetCore = targetCore,
-            serverNode = profile.toCoreProfile(),
+            serverNode = activeTargetProfile.toCoreProfile(),
+            chainNodes = if (isChain) effectiveChain!!.map { it.toCoreProfile() } else null,
             clientInbound = clientInbound,
             serverInbounds = serverInbounds,
             routing = routingSpec,
             dns = dnsSpec,
             logLevel = "info",
-            rawJsonConfig = if (profile.fullJsonConfig.isNotEmpty()) profile.fullJsonConfig else null
+            rawJsonConfig = if (!isChain && profile.fullJsonConfig.isNotEmpty()) profile.fullJsonConfig else null
         )
     }
 
@@ -328,6 +412,45 @@ object XrayConfigManager {
      * All routing presets (RU, torrents, ads, etc.) and security policies are compiled
      * directly by Sentinel-Core as the single source of truth.
      */
+    fun getEntryConfigFile(context: Context): File {
+        return File(context.filesDir, "entry_xray_config.json")
+    }
+
+    /**
+     * Compiles the Entry Gateway configuration for multi-instance chaining (Hop 1).
+     * Supports complex subscription configurations with burst observatory and leastLoad balancers.
+     * Exposes a local authenticated SOCKS5 proxy on 127.0.0.1:[entryCreds.port].
+     */
+    fun compileEntryGatewayConfig(
+        context: Context,
+        profile: ServerProfile,
+        entryCreds: LocalProxyCredentials
+    ): File {
+        val configFile = getEntryConfigFile(context)
+        val clientInbound = ClientInboundSpec(
+            mode = "system_proxy",
+            socksPort = entryCreds.port,
+            listenAddress = getLoopbackAddress(),
+            authEnabled = true,
+            authUsername = entryCreds.username,
+            authPassword = entryCreds.token
+        )
+        val spec = ConfigSpec(
+            targetCore = "xray",
+            serverNode = if (profile.fullJsonConfig.isEmpty()) profile.toCoreProfile() else null,
+            clientInbound = clientInbound,
+            logLevel = "warning",
+            rawJsonConfig = if (profile.fullJsonConfig.isNotEmpty()) profile.fullJsonConfig else null
+        )
+        val buildResult = SentinelCore.buildConfig(spec)
+        if (buildResult.configJson.isNotEmpty()) {
+            configFile.writeText(buildResult.configJson, Charsets.UTF_8)
+            Log.i(TAG, "Successfully compiled entry gateway config via Sentinel-Core (${buildResult.targetCore})")
+            return configFile
+        }
+        throw IllegalStateException("Sentinel-Core failed to compile entry gateway config: ${buildResult.error}")
+    }
+
     fun compileSecureConfig(
         context: Context,
         profile: ServerProfile,
@@ -339,9 +462,11 @@ object XrayConfigManager {
         lanAuthEnabled: Boolean = false,
         lanCreds: LocalProxyCredentials? = null,
         tetheringIps: List<String> = emptyList(),
-        lanHttpPort: Int = 10809,
-        lanSocksPort: Int = 10808,
-        captureProxyPort: Int = 0
+        lanHttpPort: Int = 0,
+        lanSocksPort: Int = 0,
+        captureProxyPort: Int = 0,
+        chainProfiles: List<ServerProfile>? = null,
+        entryHopCreds: LocalProxyCredentials? = null
     ): File {
         val configFile = getActiveConfigFile(context)
         val spec = buildConfigSpec(
@@ -357,7 +482,9 @@ object XrayConfigManager {
             tetheringIps = tetheringIps,
             lanHttpPort = lanHttpPort,
             lanSocksPort = lanSocksPort,
-            captureProxyPort = captureProxyPort
+            captureProxyPort = captureProxyPort,
+            chainProfiles = chainProfiles,
+            entryHopCreds = entryHopCreds
         )
 
         // Build configuration via Sentinel-Core Go Engine (Single Source of Truth)
@@ -373,31 +500,53 @@ object XrayConfigManager {
 
     /**
      * Compiles a preview config JSON for the active or specified profile using Sentinel-Core
-     * without starting the VPN process.
+     * without starting the VPN process. Supports multi-hop chained proxy setups.
      */
     fun buildPreviewConfigJson(
         context: Context,
-        profile: ServerProfile? = null
+        profile: ServerProfile? = null,
+        chainProfiles: List<ServerProfile>? = null,
+        entryHopCreds: LocalProxyCredentials? = null
     ): Pair<String, String?> {
         return try {
-            val targetProfile = profile
-                ?: XrayProfilePersistence.resolveActiveProfile(context)
-                ?: ServerProfile(name = "Direct", address = "127.0.0.1", port = 1080, type = "DIRECT")
+            val effectiveChain = chainProfiles ?: if (profile == null && XrayProfilePersistence.loadChainEnabled(context)) {
+                XrayProfilePersistence.resolveChainProfiles(context).takeIf { it.size >= 2 }
+            } else null
 
-            val port = XrayProfilePersistence.loadLocalProxyPort(context)
-            val username = XrayProfilePersistence.loadLocalProxyUsername(context).ifEmpty { "preview_user" }
-            val token = XrayProfilePersistence.loadLocalProxyPassword(context).ifEmpty { "preview_token" }
-            val creds = LocalProxyCredentials(port = port, username = username, token = token)
+            val targetProfile = profile
+                ?: effectiveChain?.lastOrNull()
+                ?: XrayProfilePersistence.resolveActiveProfile(context)
+                ?: ServerProfile(name = "Direct", address = getLoopbackAddress(), port = findRandomOpenPort(), type = "DIRECT")
+
+            val savedPort = XrayProfilePersistence.loadLocalProxyPort(context)
+            val creds = if (savedPort > 0) {
+                LocalProxyCredentials(
+                    port = savedPort,
+                    username = XrayProfilePersistence.loadLocalProxyUsername(context).ifEmpty { generateSecureCredentials().username },
+                    token = XrayProfilePersistence.loadLocalProxyPassword(context).ifEmpty { generateSecureCredentials().token }
+                )
+            } else {
+                generateSecureCredentials()
+            }
+
+            val effectiveEntryCreds = entryHopCreds ?: if (effectiveChain != null) {
+                generateSecureCredentials(excludePorts = setOf(creds.port))
+            } else null
 
             val isLanSharingEnabled = XrayProfilePersistence.loadLanSharing(context)
             val isLanHttp = XrayProfilePersistence.loadLanSharingHttp(context)
             val isLanSocks = XrayProfilePersistence.loadLanSharingSocks(context)
             val isLanAuth = XrayProfilePersistence.loadLanSharingAuth(context)
-            val lanCreds = if (isLanAuth) LocalProxyCredentials(
-                port = 0,
-                username = XrayProfilePersistence.loadLanSharingUsername(context).ifEmpty { "lan_user" },
-                token = XrayProfilePersistence.loadLanSharingPassword(context).ifEmpty { "lan_token" }
-            ) else null
+            val lanCreds = if (isLanAuth) {
+                val lanUser = XrayProfilePersistence.loadLanSharingUsername(context)
+                val lanToken = XrayProfilePersistence.loadLanSharingPassword(context)
+                if (lanUser.isNotEmpty() && lanToken.isNotEmpty()) {
+                    LocalProxyCredentials(port = 0, username = lanUser, token = lanToken)
+                } else {
+                    val gen = generateSecureCredentials()
+                    LocalProxyCredentials(port = 0, username = gen.username, token = gen.token)
+                }
+            } else null
 
             val allowedApps = XrayProfilePersistence.loadAllowedApps(context)
             val blockedApps = XrayProfilePersistence.loadBlockedApps(context).toList()
@@ -417,7 +566,9 @@ object XrayConfigManager {
                 lanAuthEnabled = isLanAuth,
                 lanCreds = lanCreds,
                 lanHttpPort = lanHttpPort,
-                lanSocksPort = lanSocksPort
+                lanSocksPort = lanSocksPort,
+                chainProfiles = effectiveChain,
+                entryHopCreds = effectiveEntryCreds
             )
 
             val buildResult = SentinelCore.buildConfig(spec)
@@ -428,6 +579,49 @@ object XrayConfigManager {
             }
         } catch (e: Exception) {
             Pair("", e.message ?: "Failed to generate preview")
+        }
+    }
+
+    /**
+     * Compiles a preview Entry Gateway config JSON (Hop 1) for the entry profile using Sentinel-Core
+     * without modifying the live file on disk.
+     */
+    fun buildPreviewEntryGatewayJson(
+        context: Context,
+        profile: ServerProfile? = null,
+        entryCreds: LocalProxyCredentials? = null
+    ): Pair<String, String?> {
+        return try {
+            val targetProfile = profile
+                ?: XrayProfilePersistence.resolveChainProfiles(context).firstOrNull()
+                ?: XrayProfilePersistence.resolveActiveProfile(context)
+                ?: ServerProfile(name = "Direct", address = getLoopbackAddress(), port = findRandomOpenPort(), type = "DIRECT")
+
+            val effectiveCreds = entryCreds ?: generateSecureCredentials()
+
+            val clientInbound = ClientInboundSpec(
+                mode = "system_proxy",
+                socksPort = effectiveCreds.port,
+                listenAddress = getLoopbackAddress(),
+                authEnabled = true,
+                authUsername = effectiveCreds.username,
+                authPassword = effectiveCreds.token
+            )
+            val spec = ConfigSpec(
+                targetCore = "xray",
+                serverNode = if (targetProfile.fullJsonConfig.isEmpty()) targetProfile.toCoreProfile() else null,
+                clientInbound = clientInbound,
+                logLevel = "warning",
+                rawJsonConfig = if (targetProfile.fullJsonConfig.isNotEmpty()) targetProfile.fullJsonConfig else null
+            )
+            val buildResult = SentinelCore.buildConfig(spec)
+            if (buildResult.configJson.isNotEmpty()) {
+                Pair(buildResult.configJson, null)
+            } else {
+                Pair("", buildResult.error ?: "Sentinel-Core entry gateway preview error")
+            }
+        } catch (e: Exception) {
+            Pair("", e.message ?: "Failed to generate entry gateway preview")
         }
     }
 }
